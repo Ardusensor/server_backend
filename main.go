@@ -20,7 +20,6 @@ import (
 )
 
 var (
-	logtofile     = flag.Bool("logtofile", false, "write log to server.log")
 	port          = flag.Int("port", 8090, "TCP port to listen on")
 	webserverPort = flag.Int("webserver_port", 8084, "TCP port to listen on")
 	environment   = flag.String("environment", "development", "environment")
@@ -65,8 +64,8 @@ func main() {
 	r.HandleFunc("/logs", handleGetLogs).Methods("GET")
 	http.Handle("/", r)
 
-	if *logtofile {
-		f, err := os.OpenFile(filepath.Join("log", "sensor_server.log"), os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0640)
+	if *environment == "production" || *environment == "test" {
+		f, err := os.OpenFile(filepath.Join("log", *environment+".log"), os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0640)
 		if err != nil {
 			log.Fatal(err)
 		}
