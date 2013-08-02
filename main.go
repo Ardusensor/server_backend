@@ -58,10 +58,10 @@ func main() {
 
 	r := mux.NewRouter()
 
-	r.HandleFunc("/api/v1/sensors", handleGetSensors).Methods("GET")
-	r.HandleFunc("/api/v1/sensors/{sensor_id}/entries", handleGetSensorEntries).Methods("GET")
-	r.HandleFunc("/log", handleGetLogs).Methods("GET")
-	r.HandleFunc("/logs", handleGetLogs).Methods("GET")
+	r.HandleFunc("/api/v1/sensors", getSensors).Methods("GET")
+	r.HandleFunc("/api/v1/sensors/{sensor_id}/entries", getSensorEntries).Methods("GET")
+	r.HandleFunc("/log", getLogs).Methods("GET")
+	r.HandleFunc("/logs", getLogs).Methods("GET")
 	http.Handle("/", r)
 
 	if *environment == "production" || *environment == "test" {
@@ -137,7 +137,7 @@ func handleConnection(conn net.Conn) {
 	log.Println("Processed", count, "entries in", time.Since(start))
 }
 
-func handleGetLogs(w http.ResponseWriter, r *http.Request) {
+func getLogs(w http.ResponseWriter, r *http.Request) {
 	redisClient := redisPool.Get()
 	defer redisClient.Close()
 
@@ -155,7 +155,7 @@ func handleGetLogs(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func handleGetSensors(w http.ResponseWriter, r *http.Request) {
+func getSensors(w http.ResponseWriter, r *http.Request) {
 	redisClient := redisPool.Get()
 	defer redisClient.Close()
 
@@ -189,7 +189,7 @@ func handleGetSensors(w http.ResponseWriter, r *http.Request) {
 	w.Write(b)
 }
 
-func handleGetSensorEntries(w http.ResponseWriter, r *http.Request) {
+func getSensorEntries(w http.ResponseWriter, r *http.Request) {
 	// Parse sensor ID
 	s, ok := mux.Vars(r)["sensor_id"]
 	if !ok {
