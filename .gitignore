@@ -25,5 +25,7 @@ open_sensor_platform
 
 bin
 
+main
+
 # Configuration files per deployment
 config
