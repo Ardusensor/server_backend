@@ -6,12 +6,12 @@ import (
 	"flag"
 	"fmt"
 	"github.com/garyburd/redigo/redis"
-	"github.com/gorilla/mux"
 	"io"
 	"log"
 	"net"
 	"net/http"
 	"os"
+	"github.com/gorilla/mux"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -56,13 +56,13 @@ func main() {
 	redisPool = getRedisPool(*redisHost)
 	defer redisPool.Close()
 
-	r := mux.NewRouter()
-
-	r.HandleFunc("/api/v1/sensors", getSensors).Methods("GET")
-	r.HandleFunc("/api/v1/sensors/{sensor_id}/entries", getSensorEntries).Methods("GET")
-	r.HandleFunc("/log", getLogs).Methods("GET")
-	r.HandleFunc("/logs", getLogs).Methods("GET")
-	http.Handle("/", r)
+	http.HandleFunc("/api/v1/sensors", getSensors)
+	http.HandleFunc("/api/v1/sensors/{sensor_id}/entries", getSensorEntries)
+	http.HandleFunc("/log", getLogs)
+	http.HandleFunc("/logs", getLogs)
+	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
+	http.Handle("/index.html", http.FileServer(http.Dir("static")))
+	http.Handle("/", http.FileServer(http.Dir("static")))
 
 	if *environment == "production" || *environment == "test" {
 		f, err := os.OpenFile(filepath.Join("log", *environment+".log"), os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0640)
