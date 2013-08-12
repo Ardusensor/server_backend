@@ -22,9 +22,8 @@ _testmain.go
 *.exe
 
 open_sensor_platform
-
 bin
-
+dist
 main
 
 # Configuration files per deployment
