@@ -169,7 +169,7 @@ func getControllers(w http.ResponseWriter, r *http.Request) {
 	redisClient := redisPool.Get()
 	defer redisClient.Close()
 
-	bb, err := redisClient.Do("SMEMBERS", keyControllers)
+	ids, err := redis.Strings(redisClient.Do("SMEMBERS", keyControllers))
 	if err != nil {
 		log.Println(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -177,8 +177,7 @@ func getControllers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	controllers := make([]*Controller, 0)
-	for _, b := range bb.([][]byte) {
-		controllerID := string(b)
+	for _, controllerID := range ids {
 		controllerName := "FIXME: get controller name using HGET"
 		controller := &Controller{ID: controllerID, Name: controllerName}
 		controllers = append(controllers, controller)
@@ -378,7 +377,7 @@ func ProcessTicks(tickList string) (int, error) {
 	defer redisClient.Close()
 
 	tickList = strings.Replace(tickList, "\r", "\n", -1)
-	registeredSensorIds := make(map[int64]bool)
+	registeredSensorIds := make(map[string]map[int64]bool)
 	processedCount := 0
 	for _, s := range strings.Split(tickList, "\n") {
 		if len(s) == 0 {
@@ -398,14 +397,20 @@ func ProcessTicks(tickList string) (int, error) {
 		controllerID := "myfancycontroller"
 
 		// Register sensor for later lookup
-		_, sensorRegistered := registeredSensorIds[tick.SensorID]
-		if sensorRegistered {
-			continue
+		if _, exists := registeredSensorIds[controllerID]; !exists {
+			registeredSensorIds[controllerID] = make(map[int64]bool)
+			if _, err := redisClient.Do("SADD", keyControllers, controllerID); err != nil {
+				return 0, err
+			}
 		}
-		if _, err := redisClient.Do("SADD", keyOfControllerSensors(controllerID), fmt.Sprintf("%d", tick.SensorID)); err != nil {
-			return 0, err
+		sensorMap := registeredSensorIds[controllerID]
+		if _, exists := sensorMap[tick.SensorID]; !exists {
+			if _, err := redisClient.Do("SADD",
+				keyOfControllerSensors(controllerID), fmt.Sprintf("%d", tick.SensorID)); err != nil {
+				return 0, err
+			}
+			sensorMap[tick.SensorID] = true
 		}
-		registeredSensorIds[tick.SensorID] = true
 	}
 	return processedCount, nil
 }
