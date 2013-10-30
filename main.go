@@ -184,8 +184,14 @@ func getControllers(w http.ResponseWriter, r *http.Request) {
 
 	controllers := make([]*Controller, 0)
 	for _, controllerID := range ids {
-		controllerName := "FIXME: get controller name using HGET"
-		controller := &Controller{ID: controllerID, Name: controllerName}
+		controller := &Controller{ID: controllerID}
+		controllerName, err := redis.String(redisClient.Do("HGET", controller.key(), "name"))
+		if err != nil {
+			log.Println(err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		controller.Name = controllerName
 		controllers = append(controllers, controller)
 	}
 
