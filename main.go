@@ -50,14 +50,15 @@ type (
 		Name string `json:"name"`
 	}
 	Sensor struct {
-		ID int64 `json:"id"`
+		ID       int64     `json:"id"`
+		LastTick time.Time `json:"last_tick,omitempty"`
 	}
 	Tick struct {
 		Datetime        time.Time `json:"datetime"`
 		SensorID        int64     `json:"sensor_id"`
 		NextDataSession string    `json:"next_data_session,omitempty"` // sec
 		BatteryVoltage  string    `json:"battery_voltage,omitempty"`   // mV
-		Sensor1         string    `json:"sensor1,omitempty"`
+		Sensor1         string    `json:"sensor1,omitempty"`           // temperature
 		Sensor2         string    `json:"sensor2,omitempty"`
 		RadioQuality    string    `json:"radio_quality,omitempty"` // (LQI=0..255)
 	}
@@ -271,6 +272,26 @@ func getControllerSensors(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		sensor := &Sensor{ID: sensorID}
+
+		// Get last tick of sensor
+		var lastTick *Tick
+		b, err := redisClient.Do("ZREVRANGE", keyOfSensorTicks(sensorID), 0, 1)
+		if err != nil {
+			if err != redis.ErrNil {
+				log.Println(err)
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			if err := json.Unmarshal(b.([]byte), lastTick); err != nil {
+				log.Println(err)
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+		}
+		if lastTick != nil {
+			sensor.LastTick = lastTick.Datetime
+
+		}
 		sensors = append(sensors, sensor)
 	}
 
