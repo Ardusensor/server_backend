@@ -58,9 +58,10 @@ type (
 		SensorID        int64     `json:"sensor_id"`
 		NextDataSession string    `json:"next_data_session,omitempty"` // sec
 		BatteryVoltage  string    `json:"battery_voltage,omitempty"`   // mV
-		Sensor1         string    `json:"sensor1,omitempty"`           // temperature
+		Sensor1         string    `json:"sensor1,omitempty"`           // encoded temperature
 		Sensor2         string    `json:"sensor2,omitempty"`
 		RadioQuality    string    `json:"radio_quality,omitempty"` // (LQI=0..255)
+		Temperature     float64   `json:"temperature,omitempty"`
 	}
 	PaginatedTicks struct {
 		Ticks []*Tick `json:"ticks"`
@@ -420,6 +421,11 @@ func FindTicks(sensorID int64, startIndex, stopIndex int) (*PaginatedTicks, erro
 		if err := json.Unmarshal(b, &tick); err != nil {
 			return nil, err
 		}
+		temperature, err := strconv.ParseInt(tick.Sensor1, 10, 32)
+		if err != nil {
+			return nil, err
+		}
+		tick.Temperature = decodeTemperature(int32(temperature))
 		result.Ticks = append(result.Ticks, &tick)
 	}
 
@@ -497,4 +503,36 @@ func ProcessTicks(tickList string) (int, error) {
 		}
 	}
 	return processedCount, nil
+}
+
+func decodeTemperature(n int32) float64 {
+	sum := 0.0
+	if n&(1<<7) != 0 {
+		sum += 0.5
+	}
+	if n&(1<<8) != 0 {
+		sum += 1
+	}
+	if n&(1<<9) != 0 {
+		sum += 2
+	}
+	if n&(1<<10) != 0 {
+		sum += 4
+	}
+	if n&(1<<11) != 0 {
+		sum += 8
+	}
+	if n&(1<<12) != 0 {
+		sum += 16
+	}
+	if n&(1<<13) != 0 {
+		sum += 32
+	}
+	if n&(1<<14) != 0 {
+		sum += 64
+	}
+	if n&(1<<15) != 0 {
+		return -sum
+	}
+	return sum
 }

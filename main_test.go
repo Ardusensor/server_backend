@@ -130,3 +130,9 @@ func TestProcessSingleLineStartingWithR(t *testing.T) {
 	assert(t, err, equals, nil)
 	assert(t, count, equals, 1)
 }
+
+func TestDecodeTemperature(t *testing.T) {
+	assert(t, decodeTemperature(5056), equals, 19.5)
+	assert(t, decodeTemperature(2528), equals, 9.5)
+	assert(t, decodeTemperature(2240), equals, 8.5)
+}
