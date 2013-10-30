@@ -61,7 +61,9 @@ type (
 		Sensor1         string    `json:"sensor1,omitempty"`           // encoded temperature
 		Sensor2         string    `json:"sensor2,omitempty"`
 		RadioQuality    string    `json:"radio_quality,omitempty"` // (LQI=0..255)
-		Temperature     float64   `json:"temperature,omitempty"`
+		// Visual/rendering
+		Temperature          float64 `json:"temperature,omitempty"`
+		BatteryVoltageVisual float64 `json:"battery_voltage_visual,omitempty"` // actual mV value, for visual
 	}
 	PaginatedTicks struct {
 		Ticks []*Tick `json:"ticks"`
@@ -426,6 +428,11 @@ func FindTicks(sensorID int64, startIndex, stopIndex int) (*PaginatedTicks, erro
 			return nil, err
 		}
 		tick.Temperature = decodeTemperature(int32(temperature))
+		f, err := formatBatteryVoltage(tick.BatteryVoltage)
+		if err != nil {
+			return nil, err
+		}
+		tick.BatteryVoltageVisual = f
 		result.Ticks = append(result.Ticks, &tick)
 	}
 
@@ -503,6 +510,14 @@ func ProcessTicks(tickList string) (int, error) {
 		}
 	}
 	return processedCount, nil
+}
+
+func formatBatteryVoltage(input string) (float64, error) {
+	value, err := strconv.ParseInt(input, 10, 64)
+	if err != nil {
+		return 0, err
+	}
+	return float64(value) / 1000.0, nil
 }
 
 func decodeTemperature(n int32) float64 {
