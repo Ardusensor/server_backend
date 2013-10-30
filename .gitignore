@@ -21,10 +21,11 @@ _testmain.go
 
 *.exe
 
-open_sensor_platform
+osp_server
 bin
 dist
 main
 
 # Configuration files per deployment
 config
+
