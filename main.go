@@ -73,12 +73,14 @@ func main() {
 	redisPool = getRedisPool(*redisHost)
 	defer redisPool.Close()
 
-	http.HandleFunc("/api/controllers", getControllers)
-	http.HandleFunc("/api/controllers/{controller_id}", putController)
-	http.HandleFunc("/api/controllers/{controller_id}/sensors", getControllerSensors)
-	http.HandleFunc("/api/sensors/{sensor_id}/ticks", getSensorTicks)
-	http.HandleFunc("/api/log", getLogs)
-	http.HandleFunc("/api/logs", getLogs)
+	r := mux.NewRouter()
+	r.HandleFunc("/api/controllers/{controller_id}/sensors", getControllerSensors)
+	r.HandleFunc("/api/controllers/{controller_id}", putController)
+	r.HandleFunc("/api/controllers", getControllers)
+	r.HandleFunc("/api/sensors/{sensor_id}/ticks", getSensorTicks)
+	r.HandleFunc("/api/log", getLogs)
+	r.HandleFunc("/api/logs", getLogs)
+	http.Handle("/", r)
 
 	if *environment == "production" || *environment == "test" {
 		f, err := os.OpenFile(filepath.Join("log", *environment+".log"), os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0640)
