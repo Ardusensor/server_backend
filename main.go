@@ -28,6 +28,17 @@ var (
 
 var redisPool *redis.Pool
 
+const keyControllers = "osp:controllers"
+const keyLogs = "osp:logs"
+
+func keyOfControllerSensors(controllerID string) string {
+	return "osp:controller:" + controllerID + ":sensors"
+}
+
+func keyOfSensorTicks(sensorID int64) string {
+	return fmt.Sprintf("osp:sensor:%d:ticks", sensorID)
+}
+
 type (
 	Controller struct {
 		ID   string `json:"id"`
@@ -58,8 +69,7 @@ func main() {
 	defer redisPool.Close()
 
 	http.HandleFunc("/controllers", getControllers)
-	http.HandleFunc("/controller/{controller_id}/sensors", getControllers)
-	http.HandleFunc("/sensors", getSensors)
+	http.HandleFunc("/controller/{controller_id}/sensors", getControllerSensors)
 	http.HandleFunc("/sensors/{sensor_id}/ticks", getSensorTicks)
 	http.HandleFunc("/log", getLogs)
 	http.HandleFunc("/logs", getLogs)
@@ -118,11 +128,11 @@ func handleConnection(conn net.Conn) {
 	go func() {
 		redisClient := redisPool.Get()
 		defer redisClient.Close()
-		if _, err := redisClient.Do("LPUSH", "sensor_server:logs", time.Now().String()+" "+buf.String()); err != nil {
+		if _, err := redisClient.Do("LPUSH", keyLogs, time.Now().String()+" "+buf.String()); err != nil {
 			log.Println(err)
 			return
 		}
-		if _, err := redisClient.Do("LTRIM", "sensor_server:logs", 0, 1000); err != nil {
+		if _, err := redisClient.Do("LTRIM", keyLogs, 0, 1000); err != nil {
 			log.Println(err)
 			return
 		}
@@ -141,7 +151,7 @@ func getLogs(w http.ResponseWriter, r *http.Request) {
 	redisClient := redisPool.Get()
 	defer redisClient.Close()
 
-	bb, err := redisClient.Do("LRANGE", "sensor_server:logs", 0, 1000)
+	bb, err := redisClient.Do("LRANGE", keyLogs, 0, 1000)
 	if err != nil {
 		log.Println(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -154,8 +164,6 @@ func getLogs(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("\n\r"))
 	}
 }
-
-const keyControllers = "zeitl:controllers"
 
 func getControllers(w http.ResponseWriter, r *http.Request) {
 	redisClient := redisPool.Get()
@@ -187,11 +195,18 @@ func getControllers(w http.ResponseWriter, r *http.Request) {
 	w.Write(b)
 }
 
-func getSensors(w http.ResponseWriter, r *http.Request) {
+func getControllerSensors(w http.ResponseWriter, r *http.Request) {
+	// Parse controller ID
+	controllerID, ok := mux.Vars(r)["controller_id"]
+	if !ok {
+		http.Error(w, "Missing controller_id", http.StatusInternalServerError)
+		return
+	}
+
 	redisClient := redisPool.Get()
 	defer redisClient.Close()
 
-	bb, err := redisClient.Do("SMEMBERS", "known_sensors")
+	bb, err := redisClient.Do("SMEMBERS", keyOfControllerSensors(controllerID))
 	if err != nil {
 		log.Println(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -353,10 +368,6 @@ func (tick Tick) key() string {
 	return keyOfSensorTicks(tick.SensorID)
 }
 
-func keyOfSensorTicks(sensorID int64) string {
-	return fmt.Sprintf("sensor:%d:ticks", sensorID)
-}
-
 func (tick Tick) String() string {
 	return fmt.Sprintf("datetime: %v, sensor ID: %d, next: %s, battery: %s, sensor1: %s, sensor2: %s, radio: %s",
 		tick.Datetime, tick.SensorID, tick.NextDataSession, tick.BatteryVoltage, tick.Sensor1, tick.Sensor2, tick.RadioQuality)
@@ -382,12 +393,16 @@ func ProcessTicks(tickList string) (int, error) {
 		}
 		log.Println("Saved:", tick)
 		processedCount += 1
+
+		// controller ID will be sent 
+		controllerID := "myfancycontroller"
+
 		// Register sensor for later lookup
 		_, sensorRegistered := registeredSensorIds[tick.SensorID]
 		if sensorRegistered {
 			continue
 		}
-		if _, err := redisClient.Do("SADD", "known_sensors", fmt.Sprintf("%d", tick.SensorID)); err != nil {
+		if _, err := redisClient.Do("SADD", keyOfControllerSensors(controllerID), fmt.Sprintf("%d", tick.SensorID)); err != nil {
 			return 0, err
 		}
 		registeredSensorIds[tick.SensorID] = true
