@@ -6,12 +6,12 @@ import (
 	"flag"
 	"fmt"
 	"github.com/garyburd/redigo/redis"
+	"github.com/gorilla/mux"
 	"io"
 	"log"
 	"net"
 	"net/http"
 	"os"
-	"github.com/gorilla/mux"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -29,12 +29,14 @@ var (
 var redisPool *redis.Pool
 
 type (
-	// Sensor is a unit on the ground, sending us measurements
+	Controller struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	}
 	Sensor struct {
 		ID int64 `json:"id"`
 	}
-	// Entry is a measurement collected from a sensor
-	Entry struct {
+	Tick struct {
 		Datetime        time.Time `json:"datetime"`
 		SensorID        int64     `json:"sensor_id"`
 		NextDataSession string    `json:"next_data_session,omitempty"` // sec
@@ -43,10 +45,9 @@ type (
 		Sensor2         string    `json:"sensor2,omitempty"`
 		RadioQuality    string    `json:"radio_quality,omitempty"` // (LQI=0..255)
 	}
-	// PaginatedEntries is for paginating entries
-	PaginatedEntries struct {
-		Entries []*Entry `json:"entries"`
-		Total   int      `json:"total"`
+	PaginatedTicks struct {
+		Ticks []*Tick `json:"ticks"`
+		Total int     `json:"total"`
 	}
 )
 
@@ -56,13 +57,12 @@ func main() {
 	redisPool = getRedisPool(*redisHost)
 	defer redisPool.Close()
 
-	http.HandleFunc("/api/v1/sensors", getSensors)
-	http.HandleFunc("/api/v1/sensors/{sensor_id}/entries", getSensorEntries)
+	http.HandleFunc("/controllers", getControllers)
+	http.HandleFunc("/controller/{controller_id}/sensors", getControllers)
+	http.HandleFunc("/sensors", getSensors)
+	http.HandleFunc("/sensors/{sensor_id}/ticks", getSensorTicks)
 	http.HandleFunc("/log", getLogs)
 	http.HandleFunc("/logs", getLogs)
-	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
-	http.Handle("/index.html", http.FileServer(http.Dir("static")))
-	http.Handle("/", http.FileServer(http.Dir("static")))
 
 	if *environment == "production" || *environment == "test" {
 		f, err := os.OpenFile(filepath.Join("log", *environment+".log"), os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0640)
@@ -129,12 +129,12 @@ func handleConnection(conn net.Conn) {
 	}()
 
 	start := time.Now()
-	count, err := ProcessEntries(buf.String())
+	count, err := ProcessTicks(buf.String())
 	if err != nil {
-		log.Println("Error while processing entries:", err)
+		log.Println("Error while processing ticks:", err)
 		return
 	}
-	log.Println("Processed", count, "entries in", time.Since(start))
+	log.Println("Processed", count, "ticks in", time.Since(start))
 }
 
 func getLogs(w http.ResponseWriter, r *http.Request) {
@@ -153,6 +153,38 @@ func getLogs(w http.ResponseWriter, r *http.Request) {
 		w.Write(b)
 		w.Write([]byte("\n\r"))
 	}
+}
+
+const keyControllers = "zeitl:controllers"
+
+func getControllers(w http.ResponseWriter, r *http.Request) {
+	redisClient := redisPool.Get()
+	defer redisClient.Close()
+
+	bb, err := redisClient.Do("SMEMBERS", keyControllers)
+	if err != nil {
+		log.Println(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	controllers := make([]*Controller, 0)
+	for _, b := range bb.([][]byte) {
+		controllerID := string(b)
+		controllerName := "FIXME: get controller name using HGET"
+		controller := &Controller{ID: controllerID, Name: controllerName}
+		controllers = append(controllers, controller)
+	}
+
+	b, err := json.Marshal(controllers)
+	if err != nil {
+		log.Println(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write(b)
 }
 
 func getSensors(w http.ResponseWriter, r *http.Request) {
@@ -189,7 +221,7 @@ func getSensors(w http.ResponseWriter, r *http.Request) {
 	w.Write(b)
 }
 
-func getSensorEntries(w http.ResponseWriter, r *http.Request) {
+func getSensorTicks(w http.ResponseWriter, r *http.Request) {
 	// Parse sensor ID
 	s, ok := mux.Vars(r)["sensor_id"]
 	if !ok {
@@ -203,7 +235,7 @@ func getSensorEntries(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Parse start index of entry range
+	// Parse start index of tick range
 	startIndex, err := strconv.Atoi(r.FormValue("start_index"))
 	if err != nil {
 		log.Println(err)
@@ -211,7 +243,7 @@ func getSensorEntries(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Parse stop index of entry range
+	// Parse stop index of tick range
 	stopIndex, err := strconv.Atoi(r.FormValue("stop_index"))
 	if err != nil {
 		log.Println(err)
@@ -219,8 +251,8 @@ func getSensorEntries(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Find entries in the given start index - stop index range
-	result, err := FindEntries(sensorID, startIndex, stopIndex)
+	// Find ticks in the given start index - stop index range
+	result, err := FindTicks(sensorID, startIndex, stopIndex)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -250,9 +282,8 @@ func getRedisPool(host string) *redis.Pool {
 	}
 }
 
-// NewEntry parses input bytes and returns an Entry or error, if parse failed
-func NewEntry(input string) (*Entry, error) {
-	log.Println("NewEntry, input: ", input)
+func NewTick(input string) (*Tick, error) {
+	log.Println("NewTick, input: ", input)
 	contents := input[1 : len(input)-1]
 	parts := strings.Split(contents, ";")
 	datetime, err := time.Parse("2006-1-2 15:4:5", parts[0])
@@ -263,7 +294,7 @@ func NewEntry(input string) (*Entry, error) {
 	if err != nil {
 		return nil, err
 	}
-	entry := &Entry{
+	tick := &Tick{
 		Datetime:        datetime,
 		SensorID:        sensorID,
 		NextDataSession: parts[2],
@@ -272,97 +303,94 @@ func NewEntry(input string) (*Entry, error) {
 		Sensor2:         parts[5],
 		RadioQuality:    parts[6],
 	}
-	return entry, err
+	return tick, err
 }
 
-// FindEntries finds sensor entries. Result is paginated.
-func FindEntries(sensorID int64, startIndex, stopIndex int) (*PaginatedEntries, error) {
+func FindTicks(sensorID int64, startIndex, stopIndex int) (*PaginatedTicks, error) {
 	redisClient := redisPool.Get()
 	defer redisClient.Close()
 
-	total, err := redis.Int(redisClient.Do("ZCARD", setKey(sensorID)))
+	total, err := redis.Int(redisClient.Do("ZCARD", keyOfSensorTicks(sensorID)))
 	if err != nil {
 		return nil, err
 	}
 
-	bb, err := redisClient.Do("ZREVRANGE", setKey(sensorID), startIndex, stopIndex)
+	bb, err := redisClient.Do("ZREVRANGE", keyOfSensorTicks(sensorID), startIndex, stopIndex)
 	if err != nil {
 		return nil, err
 	}
 
-	result := PaginatedEntries{Total: total}
+	result := PaginatedTicks{Total: total}
 	for _, b := range bb.([][]byte) {
-		entry := &Entry{}
-		if err := json.Unmarshal(b, &entry); err != nil {
+		tick := &Tick{}
+		if err := json.Unmarshal(b, &tick); err != nil {
 			return nil, err
 		}
-		result.Entries = append(result.Entries, entry)
+		result.Ticks = append(result.Ticks, tick)
 	}
 
 	return &result, nil
 }
 
-// Save saves JSON-serialized entry to Redis
-func (entry Entry) Save() error {
+func (tick Tick) Save() error {
 	redisClient := redisPool.Get()
 	defer redisClient.Close()
 
-	b, err := json.Marshal(entry)
+	b, err := json.Marshal(tick)
 	if err != nil {
 		return err
 	}
 
-	_, err = redisClient.Do("ZADD", entry.setKey(), entry.rank(), b)
+	_, err = redisClient.Do("ZADD", tick.key(), tick.rank(), b)
 	return err
 }
 
-func (entry Entry) rank() float64 {
-	return float64(entry.Datetime.Unix())
+func (tick Tick) rank() float64 {
+	return float64(tick.Datetime.Unix())
 }
 
-func (entry Entry) setKey() string {
-	return setKey(entry.SensorID)
+func (tick Tick) key() string {
+	return keyOfSensorTicks(tick.SensorID)
 }
 
-func setKey(sensorID int64) string {
-	return fmt.Sprintf("sensor:%d:entries", sensorID)
+func keyOfSensorTicks(sensorID int64) string {
+	return fmt.Sprintf("sensor:%d:ticks", sensorID)
 }
 
-func (entry Entry) String() string {
+func (tick Tick) String() string {
 	return fmt.Sprintf("datetime: %v, sensor ID: %d, next: %s, battery: %s, sensor1: %s, sensor2: %s, radio: %s",
-		entry.Datetime, entry.SensorID, entry.NextDataSession, entry.BatteryVoltage, entry.Sensor1, entry.Sensor2, entry.RadioQuality)
+		tick.Datetime, tick.SensorID, tick.NextDataSession, tick.BatteryVoltage, tick.Sensor1, tick.Sensor2, tick.RadioQuality)
 }
 
-// ProcessEntries parses
-func ProcessEntries(entryList string) (int, error) {
+func ProcessTicks(tickList string) (int, error) {
 	redisClient := redisPool.Get()
 	defer redisClient.Close()
 
-	entryList = strings.Replace(entryList, "\r", "\n", -1)
+	tickList = strings.Replace(tickList, "\r", "\n", -1)
 	registeredSensorIds := make(map[int64]bool)
 	processedCount := 0
-	for _, s := range strings.Split(entryList, "\n") {
+	for _, s := range strings.Split(tickList, "\n") {
 		if len(s) == 0 {
 			continue
 		}
-		entry, err := NewEntry(s)
+		tick, err := NewTick(s)
 		if err != nil {
 			return 0, err
 		}
-		if err := entry.Save(); err != nil {
+		if err := tick.Save(); err != nil {
 			return 0, err
 		}
-		log.Println("Saved:", entry)
+		log.Println("Saved:", tick)
 		processedCount += 1
 		// Register sensor for later lookup
-		_, sensorRegistered := registeredSensorIds[entry.SensorID]
+		_, sensorRegistered := registeredSensorIds[tick.SensorID]
 		if sensorRegistered {
 			continue
 		}
-		if _, err := redisClient.Do("SADD", "known_sensors", fmt.Sprintf("%d", entry.SensorID)); err != nil {
+		if _, err := redisClient.Do("SADD", "known_sensors", fmt.Sprintf("%d", tick.SensorID)); err != nil {
 			return 0, err
 		}
-		registeredSensorIds[entry.SensorID] = true
+		registeredSensorIds[tick.SensorID] = true
 	}
 	return processedCount, nil
 }
