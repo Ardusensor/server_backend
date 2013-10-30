@@ -277,23 +277,27 @@ func getControllerSensors(w http.ResponseWriter, r *http.Request) {
 		sensor := &Sensor{ID: sensorID}
 
 		// Get last tick of sensor
-		var lastTick *Tick
-		b, err := redisClient.Do("ZREVRANGE", keyOfSensorTicks(sensorID), 0, 1)
+		bb, err := redisClient.Do("ZREVRANGE", keyOfSensorTicks(sensorID), 0, 0)
 		if err != nil {
 			if err != redis.ErrNil {
 				log.Println(err)
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
-			if err := json.Unmarshal(b.([]byte), lastTick); err != nil {
-				log.Println(err)
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
+			bb = nil
 		}
-		if lastTick != nil {
-			sensor.LastTick = &lastTick.Datetime
-
+		if bb != nil {
+			list := bb.([]interface{})
+			if len(list) > 0 {
+				b := list[0]
+				var tick Tick
+				if err := json.Unmarshal(b.([]byte), &tick); err != nil {
+					log.Println(err)
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+				sensor.LastTick = &tick.Datetime
+			}
 		}
 		sensors = append(sensors, sensor)
 	}
