@@ -255,7 +255,7 @@ func getControllerSensors(w http.ResponseWriter, r *http.Request) {
 	redisClient := redisPool.Get()
 	defer redisClient.Close()
 
-	bb, err := redisClient.Do("SMEMBERS", keyOfControllerSensors(controllerID))
+	ids, err := redis.Strings(redisClient.Do("SMEMBERS", keyOfControllerSensors(controllerID)))
 	if err != nil {
 		log.Println(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -263,8 +263,8 @@ func getControllerSensors(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sensors := make([]*Sensor, 0)
-	for _, b := range bb.([][]byte) {
-		sensorID, err := strconv.ParseInt(string(b), 10, 64)
+	for _, sensorID := range ids {
+		sensorID, err := strconv.ParseInt(sensorID, 10, 64)
 		if err != nil {
 			log.Println(err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -447,7 +447,7 @@ func ProcessTicks(tickList string) (int, error) {
 		log.Println("Saved:", tick)
 		processedCount += 1
 
-		// controller ID will be sent 
+		// controller ID will be sent
 		controllerID := "myfancycontroller"
 
 		// Register sensor for later lookup
