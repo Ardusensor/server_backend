@@ -187,9 +187,12 @@ func getControllers(w http.ResponseWriter, r *http.Request) {
 		controller := &Controller{ID: controllerID}
 		controllerName, err := redis.String(redisClient.Do("HGET", controller.key(), "name"))
 		if err != nil {
-			log.Println(err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
+			if err != redis.ErrNil {
+				log.Println(err)
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			controllerName = controller.ID
 		}
 		controller.Name = controllerName
 		controllers = append(controllers, controller)
