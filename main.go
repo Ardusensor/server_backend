@@ -309,7 +309,7 @@ func getControllerSensors(w http.ResponseWriter, r *http.Request) {
 func getSensorTicks(w http.ResponseWriter, r *http.Request) {
 	// Parse sensor ID
 	s, ok := mux.Vars(r)["sensor_id"]
-	if !ok {
+	if !ok || s == "" {
 		http.Error(w, "Missing sensor_id", http.StatusBadRequest)
 		return
 	}
@@ -321,7 +321,11 @@ func getSensorTicks(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Parse start index of tick range
-	startIndex, err := strconv.Atoi(r.FormValue("start_index"))
+	startIndexString := r.FormValue("start_index")
+	if startIndexString == "" {
+		startIndexString = "0"
+	}
+	startIndex, err := strconv.Atoi(startIndexString)
 	if err != nil {
 		log.Println(err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -329,7 +333,11 @@ func getSensorTicks(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Parse stop index of tick range
-	stopIndex, err := strconv.Atoi(r.FormValue("stop_index"))
+	stopIndexString := r.FormValue("stop_index")
+	if stopIndexString == "" {
+		stopIndexString = "9999999999"
+	}
+	stopIndex, err := strconv.Atoi(stopIndexString)
 	if err != nil {
 		log.Println(err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -406,7 +414,8 @@ func FindTicks(sensorID int64, startIndex, stopIndex int) (*PaginatedTicks, erro
 	}
 
 	result := PaginatedTicks{Total: total}
-	for _, b := range bb.([][]byte) {
+	for _, value := range bb.([]interface{}) {
+		b := value.([]byte)
 		var tick Tick
 		if err := json.Unmarshal(b, &tick); err != nil {
 			return nil, err
