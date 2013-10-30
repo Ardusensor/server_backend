@@ -50,8 +50,8 @@ type (
 		Name string `json:"name"`
 	}
 	Sensor struct {
-		ID       int64     `json:"id"`
-		LastTick time.Time `json:"last_tick,omitempty"`
+		ID       int64      `json:"id"`
+		LastTick *time.Time `json:"last_tick,omitempty"`
 	}
 	Tick struct {
 		Datetime        time.Time `json:"datetime"`
@@ -290,7 +290,7 @@ func getControllerSensors(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if lastTick != nil {
-			sensor.LastTick = lastTick.Datetime
+			sensor.LastTick = &lastTick.Datetime
 
 		}
 		sensors = append(sensors, sensor)
