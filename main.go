@@ -8,6 +8,7 @@ import (
 	"github.com/garyburd/redigo/redis"
 	"github.com/gorilla/mux"
 	"io"
+	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
@@ -30,6 +31,10 @@ var redisPool *redis.Pool
 
 const keyControllers = "osp:controllers"
 const keyLogs = "osp:logs"
+
+func keyOfController(controllerID string) string {
+	return "osp:controller:" + controllerID + ":fields"
+}
 
 func keyOfControllerSensors(controllerID string) string {
 	return "osp:controller:" + controllerID + ":sensors"
@@ -69,7 +74,8 @@ func main() {
 	defer redisPool.Close()
 
 	http.HandleFunc("/controllers", getControllers)
-	http.HandleFunc("/controller/{controller_id}/sensors", getControllerSensors)
+	http.HandleFunc("/controllers/{controller_id}", putController)
+	http.HandleFunc("/controllers/{controller_id}/sensors", getControllerSensors)
 	http.HandleFunc("/sensors/{sensor_id}/ticks", getSensorTicks)
 	http.HandleFunc("/log", getLogs)
 	http.HandleFunc("/logs", getLogs)
@@ -194,11 +200,44 @@ func getControllers(w http.ResponseWriter, r *http.Request) {
 	w.Write(b)
 }
 
-func getControllerSensors(w http.ResponseWriter, r *http.Request) {
-	// Parse controller ID
+func putController(w http.ResponseWriter, r *http.Request) {
 	controllerID, ok := mux.Vars(r)["controller_id"]
 	if !ok {
-		http.Error(w, "Missing controller_id", http.StatusInternalServerError)
+		http.Error(w, "Missing controller_id", http.StatusBadRequest)
+		return
+	}
+
+	defer r.Body.Close()
+	b, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	var controller Controller
+	if err := json.Unmarshal(b, &controller); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	controller.ID = controllerID
+
+	redisClient := redisPool.Get()
+	defer redisClient.Close()
+
+	_, err = redisClient.Do("HSET", controller.key(), "name", controller.Name)
+	if err != nil {
+		log.Println(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+func getControllerSensors(w http.ResponseWriter, r *http.Request) {
+	controllerID, ok := mux.Vars(r)["controller_id"]
+	if !ok {
+		http.Error(w, "Missing controller_id", http.StatusBadRequest)
 		return
 	}
 
@@ -239,13 +278,13 @@ func getSensorTicks(w http.ResponseWriter, r *http.Request) {
 	// Parse sensor ID
 	s, ok := mux.Vars(r)["sensor_id"]
 	if !ok {
-		http.Error(w, "Missing sensor_id", http.StatusInternalServerError)
+		http.Error(w, "Missing sensor_id", http.StatusBadRequest)
 		return
 	}
 	sensorID, err := strconv.ParseInt(s, 10, 64)
 	if err != nil {
 		log.Println(err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -253,7 +292,7 @@ func getSensorTicks(w http.ResponseWriter, r *http.Request) {
 	startIndex, err := strconv.Atoi(r.FormValue("start_index"))
 	if err != nil {
 		log.Println(err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -261,7 +300,7 @@ func getSensorTicks(w http.ResponseWriter, r *http.Request) {
 	stopIndex, err := strconv.Atoi(r.FormValue("stop_index"))
 	if err != nil {
 		log.Println(err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -336,11 +375,11 @@ func FindTicks(sensorID int64, startIndex, stopIndex int) (*PaginatedTicks, erro
 
 	result := PaginatedTicks{Total: total}
 	for _, b := range bb.([][]byte) {
-		tick := &Tick{}
+		var tick Tick
 		if err := json.Unmarshal(b, &tick); err != nil {
 			return nil, err
 		}
-		result.Ticks = append(result.Ticks, tick)
+		result.Ticks = append(result.Ticks, &tick)
 	}
 
 	return &result, nil
@@ -370,6 +409,10 @@ func (tick Tick) key() string {
 func (tick Tick) String() string {
 	return fmt.Sprintf("datetime: %v, sensor ID: %d, next: %s, battery: %s, sensor1: %s, sensor2: %s, radio: %s",
 		tick.Datetime, tick.SensorID, tick.NextDataSession, tick.BatteryVoltage, tick.Sensor1, tick.Sensor2, tick.RadioQuality)
+}
+
+func (controller Controller) key() string {
+	return keyOfController(controller.ID)
 }
 
 func ProcessTicks(tickList string) (int, error) {
