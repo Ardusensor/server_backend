@@ -51,8 +51,9 @@ type (
 		Name string `json:"name"`
 	}
 	Sensor struct {
-		ID       int64      `json:"id"`
-		LastTick *time.Time `json:"last_tick,omitempty"`
+		ID           int64      `json:"id"`
+		LastTick     *time.Time `json:"last_tick,omitempty"`
+		ControllerID string     `json:"controller_id"`
 	}
 	Tick struct {
 		Datetime        time.Time `json:"datetime"`
@@ -277,7 +278,7 @@ func getControllerSensors(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		sensor := &Sensor{ID: sensorID}
+		sensor := &Sensor{ID: sensorID, ControllerID: controllerID}
 
 		// Get last tick of sensor
 		bb, err := redisClient.Do("ZREVRANGE", keyOfSensorTicks(sensorID), 0, 0)
