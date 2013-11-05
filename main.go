@@ -82,12 +82,13 @@ func main() {
 	defer redisPool.Close()
 
 	r := mux.NewRouter()
-	r.HandleFunc("/api/controllers/{controller_id}/sensors", getControllerSensors)
-	r.HandleFunc("/api/controllers/{controller_id}", putController)
-	r.HandleFunc("/api/controllers", getControllers)
-	r.HandleFunc("/api/sensors/{sensor_id}/ticks", getSensorTicks)
-	r.HandleFunc("/api/log", getLogs)
-	r.HandleFunc("/api/logs", getLogs)
+	r.HandleFunc("/api/controllers/{controller_id}/sensors", getControllerSensors).Methods("GET")
+	r.HandleFunc("/api/controllers/{controller_id}", putController).Methods("POST, PUT")
+	r.HandleFunc("/api/controllers/{controller_id}", getController).Methods("GET")
+	r.HandleFunc("/api/controllers", getControllers).Methods("GET")
+	r.HandleFunc("/api/sensors/{sensor_id}/ticks", getSensorTicks).Methods("GET")
+	r.HandleFunc("/api/log", getLogs).Methods("GET")
+	r.HandleFunc("/api/logs", getLogs).Methods("GET")
 	http.Handle("/", r)
 
 	if *environment == "production" || *environment == "test" {
@@ -209,6 +210,39 @@ func getControllers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	b, err := json.Marshal(controllers)
+	if err != nil {
+		log.Println(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write(b)
+}
+
+func getController(w http.ResponseWriter, r *http.Request) {
+	controllerID, ok := mux.Vars(r)["controller_id"]
+	if !ok {
+		http.Error(w, "Missing controller_id", http.StatusBadRequest)
+		return
+	}
+
+	redisClient := redisPool.Get()
+	defer redisClient.Close()
+
+	controller := &Controller{ID: controllerID}
+	controllerName, err := redis.String(redisClient.Do("HGET", controller.key(), "name"))
+	if err != nil {
+		if err != redis.ErrNil {
+			log.Println(err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		controllerName = controller.ID
+	}
+	controller.Name = controllerName
+
+	b, err := json.Marshal(controller)
 	if err != nil {
 		log.Println(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
