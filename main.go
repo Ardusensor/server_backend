@@ -31,6 +31,7 @@ var redisPool *redis.Pool
 
 const keyControllers = "osp:controllers"
 const keyLogs = "osp:logs"
+const keySensorToController = "osp:sensor_to_controller"
 
 func keyOfController(controllerID string) string {
 	return "osp:controller:" + controllerID + ":fields"
@@ -64,6 +65,8 @@ type (
 		// Visual/rendering
 		Temperature          float64 `json:"temperature,omitempty"`
 		BatteryVoltageVisual float64 `json:"battery_voltage_visual,omitempty"` // actual mV value, for visual
+		// Controller ID is not serialized
+		controllerID string
 	}
 	PaginatedTicks struct {
 		Ticks []*Tick `json:"ticks"`
@@ -403,6 +406,9 @@ func NewTick(input string) (*Tick, error) {
 		Sensor2:         parts[5],
 		RadioQuality:    parts[6],
 	}
+	if len(parts) >= 8 {
+		tick.controllerID = parts[7]
+	}
 	return tick, err
 }
 
@@ -478,42 +484,55 @@ func ProcessTicks(tickList string) (int, error) {
 	defer redisClient.Close()
 
 	tickList = strings.Replace(tickList, "\r", "\n", -1)
-	registeredSensorIds := make(map[string]map[int64]bool)
 	processedCount := 0
 	for _, s := range strings.Split(tickList, "\n") {
 		if len(s) == 0 {
 			continue
 		}
-		tick, err := NewTick(s)
+		err := processTick(redisClient, s)
 		if err != nil {
 			return 0, err
 		}
-		if err := tick.Save(); err != nil {
-			return 0, err
-		}
-		log.Println("Saved:", tick)
 		processedCount += 1
-
-		// controller ID will be sent
-		controllerID := "myfancycontroller"
-
-		// Register sensor for later lookup
-		if _, exists := registeredSensorIds[controllerID]; !exists {
-			registeredSensorIds[controllerID] = make(map[int64]bool)
-			if _, err := redisClient.Do("SADD", keyControllers, controllerID); err != nil {
-				return 0, err
-			}
-		}
-		sensorMap := registeredSensorIds[controllerID]
-		if _, exists := sensorMap[tick.SensorID]; !exists {
-			if _, err := redisClient.Do("SADD",
-				keyOfControllerSensors(controllerID), fmt.Sprintf("%d", tick.SensorID)); err != nil {
-				return 0, err
-			}
-			sensorMap[tick.SensorID] = true
-		}
 	}
+
 	return processedCount, nil
+}
+
+func processTick(redisClient redis.Conn, s string) error {
+	tick, err := NewTick(s)
+	if err != nil {
+		return err
+	}
+	if err := tick.Save(); err != nil {
+		return err
+	}
+	log.Println("Saved:", tick)
+
+	if tick.controllerID == "" {
+		id, err := redis.String(redisClient.Do("HGET", keySensorToController, tick.SensorID))
+		if err != nil && err != redis.ErrNil {
+			return err
+		}
+		tick.controllerID = id
+	}
+
+	if tick.controllerID == "" {
+		log.Println("Achtung! Controller ID not found by sensor ID", tick.SensorID, "saving tick to controller 1")
+		tick.controllerID = "1"
+	}
+
+	if _, err := redisClient.Do("SADD", keyControllers, tick.controllerID); err != nil {
+		return err
+	}
+	if _, err := redisClient.Do("HSET", keySensorToController, tick.SensorID, tick.controllerID); err != nil {
+		return err
+	}
+	if _, err := redisClient.Do("SADD",
+		keyOfControllerSensors(tick.controllerID), fmt.Sprintf("%d", tick.SensorID)); err != nil {
+		return err
+	}
+	return nil
 }
 
 func formatBatteryVoltage(input string) (float64, error) {
