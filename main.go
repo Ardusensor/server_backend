@@ -96,8 +96,8 @@ func main() {
 	r.HandleFunc("/api/logs", getLogs).Methods("GET")
 	http.Handle("/", r)
 
-	if *environment == "production" {
-		f, err := os.OpenFile(filepath.Join(*workdir, "log", "production.log"), os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0640)
+	if *environment == "production" || *environment == "staging" {
+		f, err := os.OpenFile(filepath.Join(*workdir, "log", *environment+".log"), os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0640)
 		if err != nil {
 			log.Fatal(err)
 		}
