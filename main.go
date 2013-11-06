@@ -76,10 +76,6 @@ type (
 		// Controller ID is not serialized
 		controllerID string
 	}
-	PaginatedTicks struct {
-		Ticks []*Tick `json:"ticks"`
-		Total int     `json:"total"`
-	}
 )
 
 func main() {
@@ -376,14 +372,14 @@ func getControllerSensors(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Get last tick of sensor
-		paginated, err := FindTicksByRange(sensorID, 0, 0)
+		ticks, err := FindTicksByRange(sensorID, 0, 0)
 		if err != nil {
 			log.Println(err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		if len(paginated.Ticks) > 0 {
-			sensor.LastTick = &paginated.Ticks[0].Datetime
+		if len(ticks) > 0 {
+			sensor.LastTick = &ticks[0].Datetime
 
 		}
 
@@ -644,31 +640,26 @@ func NewTick(input string) (*Tick, error) {
 	return tick, err
 }
 
-func FindTicksByRange(sensorID int64, startIndex, stopIndex int) (*PaginatedTicks, error) {
+func FindTicksByRange(sensorID int64, startIndex, stopIndex int) ([]*Tick, error) {
 	redisClient := redisPool.Get()
 	defer redisClient.Close()
-
-	total, err := redis.Int(redisClient.Do("ZCARD", keyOfSensorTicks(sensorID)))
-	if err != nil {
-		return nil, err
-	}
 
 	bb, err := redisClient.Do("ZREVRANGE", keyOfSensorTicks(sensorID), startIndex, stopIndex)
 	if err != nil {
 		return nil, err
 	}
 
-	result := PaginatedTicks{Total: total}
+	var ticks []*Tick
 	for _, value := range bb.([]interface{}) {
 		tick, err := unmarshalTick(value.([]byte))
 		if err != nil {
 			return nil, err
 		}
 		tick.decodeForVisual()
-		result.Ticks = append(result.Ticks, tick)
+		ticks = append(ticks, tick)
 	}
 
-	return &result, nil
+	return ticks, nil
 }
 
 func FindTicksByScore(sensorID int64, start, end int) ([]*Tick, error) {
