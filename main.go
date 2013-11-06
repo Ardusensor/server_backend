@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
 	"github.com/garyburd/redigo/redis"
@@ -432,7 +431,7 @@ func parseFloat(value interface{}) (float64, error) {
 	} else if n, isNumeric := value.(float64); isNumeric {
 		return float64(n), nil
 	}
-	return 0, errors.New("bad format")
+	return 0, nil
 }
 
 func parseInt(value interface{}) (int64, error) {
@@ -441,7 +440,7 @@ func parseInt(value interface{}) (int64, error) {
 	} else if n, isNumeric := value.(float64); isNumeric {
 		return int64(n), nil
 	}
-	return 0, errors.New("bad format")
+	return 0, nil
 }
 
 func getSensorDots(w http.ResponseWriter, r *http.Request) {
