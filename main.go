@@ -25,6 +25,7 @@ var (
 	webserverPort = flag.Int("webserver_port", 8084, "TCP port to listen on")
 	environment   = flag.String("environment", "development", "environment")
 	redisHost     = flag.String("redis", "127.0.0.1:6379", "host:ip of Redis instance")
+	workdir       = flag.String("workdir", ".", "workdir of API, where log folder resides etc")
 )
 
 var redisPool *redis.Pool
@@ -95,8 +96,8 @@ func main() {
 	r.HandleFunc("/api/logs", getLogs).Methods("GET")
 	http.Handle("/", r)
 
-	if *environment == "production" || *environment == "test" {
-		f, err := os.OpenFile(filepath.Join("log", *environment+".log"), os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0640)
+	if *environment == "production" {
+		f, err := os.OpenFile(filepath.Join(*workdir, "log", "production.log"), os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0640)
 		if err != nil {
 			log.Fatal(err)
 		}
