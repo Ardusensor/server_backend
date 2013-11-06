@@ -215,7 +215,7 @@ func getControllers(w http.ResponseWriter, r *http.Request) {
 	w.Write(b)
 }
 
-func unmarshalTick(b []byte) (*Tick, error) {
+func unmarshalTickJSON(b []byte) (*Tick, error) {
 	var values map[string]interface{}
 	if err := json.Unmarshal(b, &values); err != nil {
 		return nil, err
@@ -226,20 +226,20 @@ func unmarshalTick(b []byte) (*Tick, error) {
 		return nil, err
 	}
 	if tick.SensorID, err = parseInt(values["sensor_id"]); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Invalid or missing sensor_id in JSON: %s", err.Error())
 	}
 	tick.NextDataSession = values["next_data_session"].(string)
 	if tick.BatteryVoltage, err = parseFloat(values["battery_voltage"]); err != nil {
-		return nil, err
+		log.Println("Warning: Invalid or missing battery_voltage in JSON", err.Error())
 	}
 	if tick.Sensor1, err = parseInt(values["sensor1"]); err != nil {
-		return nil, err
+		log.Println("Warning: Invalid or missing sensor1 in JSON", err.Error())
 	}
 	if tick.Sensor2, err = parseInt(values["sensor2"]); err != nil {
-		return nil, err
+		log.Println("Warning: Invalid or missing sensor2 in JSON", err.Error())
 	}
 	if tick.RadioQuality, err = parseInt(values["radio_quality"]); err != nil {
-		return nil, err
+		log.Println("Warning: Invalid or missing radio_quality in JSON", err.Error())
 	}
 	return &tick, nil
 }
@@ -372,7 +372,7 @@ func FindTicksByRange(sensorID int64, startIndex, stopIndex int) ([]*Tick, error
 
 	var ticks []*Tick
 	for _, value := range bb.([]interface{}) {
-		tick, err := unmarshalTick(value.([]byte))
+		tick, err := unmarshalTickJSON(value.([]byte))
 		if err != nil {
 			return nil, err
 		}
@@ -394,7 +394,7 @@ func FindTicksByScore(sensorID int64, start, end int) ([]*Tick, error) {
 
 	var ticks []*Tick
 	for _, value := range bb.([]interface{}) {
-		tick, err := unmarshalTick(value.([]byte))
+		tick, err := unmarshalTickJSON(value.([]byte))
 		if err != nil {
 			return nil, err
 		}

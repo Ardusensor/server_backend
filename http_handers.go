@@ -154,7 +154,7 @@ func getControllerSensors(w http.ResponseWriter, r *http.Request) {
 		sensorID, err := strconv.ParseInt(sensorID, 10, 64)
 		if err != nil {
 			log.Println(err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, "Invalid or missing sensor ID", http.StatusInternalServerError)
 			return
 		}
 		sensor := &Sensor{ID: sensorID, ControllerID: controllerID}
