@@ -30,10 +30,10 @@ func TestParseTick(t *testing.T) {
 	assert(t, entry, !equals, nil)
 	assert(t, fmt.Sprintf("%d", entry.SensorID), equals, "75942")
 	assert(t, entry.NextDataSession, equals, "60")
-	assert(t, entry.BatteryVoltage, equals, "3158")
-	assert(t, entry.Sensor1, equals, "5632")
-	assert(t, entry.Sensor2, equals, "1584")
-	assert(t, entry.RadioQuality, equals, "144")
+	assert(t, entry.BatteryVoltage, equals, 3158.0)
+	assert(t, entry.Sensor1, equals, int64(5632))
+	assert(t, entry.Sensor2, equals, int64(1584))
+	assert(t, entry.RadioQuality, equals, int64(144))
 }
 
 func TestParseDateTime(t *testing.T) {

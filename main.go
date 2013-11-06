@@ -57,14 +57,14 @@ type (
 	}
 	Tick struct {
 		Datetime        time.Time `json:"datetime"`
-		SensorID        int64     `json:"sensor_id"`
+		SensorID        int64     `json:"sensor_id,omitempty"`
 		NextDataSession string    `json:"next_data_session,omitempty"` // sec
-		BatteryVoltage  string    `json:"battery_voltage,omitempty"`   // mV
-		Sensor1         string    `json:"sensor1,omitempty"`           // encoded temperature
-		Sensor2         string    `json:"sensor2,omitempty"`
-		RadioQuality    string    `json:"radio_quality,omitempty"` // (LQI=0..255)
+		BatteryVoltage  float64   `json:"battery_voltage,omitempty"`   // mV
+		Sensor1         int64     `json:"sensor1,omitempty"`           // encoded temperature
+		Sensor2         int64     `json:"sensor2,omitempty"`           // humidity
+		RadioQuality    int64     `json:"radio_quality,omitempty"`     // (LQI=0..255)
 		// Visual/rendering
-		Temperature          float64 `json:"temperature,omitempty"`
+		TemperatureVisual    float64 `json:"temperature,omitempty"`
 		BatteryVoltageVisual float64 `json:"battery_voltage_visual,omitempty"` // actual mV value, for visual
 		// Controller ID is not serialized
 		controllerID string
@@ -398,10 +398,7 @@ func getSensorDots(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		if err := tick.decodeForVisual(); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
+		tick.decodeForVisual()
 		ticks = append(ticks, &tick)
 	}
 
@@ -423,31 +420,30 @@ func getSensorDots(w http.ResponseWriter, r *http.Request) {
 }
 
 func findAverages(ticks []*Tick, dotsPerDay int, start int, end int) []*Tick {
-	var result []*Tick
-
-	// 6 dots means: 24h / 6 = 4 hour increment
-	// 12 dots means: 24h / 12 = 2 hour increment
 	startTime := time.Unix(int64(start), 0)
 	endTime := time.Unix(int64(end), 0)
-
+	// 6 dots means: 24h / 6 = 4 hour increment
+	// 12 dots means: 24h / 12 = 2 hour increment
 	hours := 24 / dotsPerDay
 	increment := time.Duration(hours) * time.Hour
-
-	//index := 0
-
+	var result []*Tick
 	for startTime.Before(endTime) {
-		//key := startTime.Format("2006-01-02 15")
-		startTime = startTime.Add(increment)
-
-		var average *Tick
-		/*
-			for _, tick := range ticks {
-				//log.Println("tick", tick.String(), "dot index", dotIndex)
+		next := startTime.Add(increment)
+		matching := 0
+		averages := &Tick{Datetime: startTime}
+		for _, tick := range ticks {
+			if (tick.Datetime.Equal(startTime) || tick.Datetime.After(startTime)) && tick.Datetime.Before(next) {
+				averages.BatteryVoltage += tick.BatteryVoltage
+				averages.RadioQuality += tick.RadioQuality
+				averages.Sensor1 += tick.Sensor1
+				averages.Sensor2 += tick.Sensor2
+				matching += 1
 			}
-		*/
-		result = append(result, average)
+		}
+		averages.decodeForVisual()
+		result = append(result, averages)
+		startTime = next
 	}
-
 	return result
 }
 
@@ -536,10 +532,22 @@ func NewTick(input string) (*Tick, error) {
 		Datetime:        datetime,
 		SensorID:        sensorID,
 		NextDataSession: parts[2],
-		BatteryVoltage:  parts[3],
-		Sensor1:         parts[4],
-		Sensor2:         parts[5],
-		RadioQuality:    parts[6],
+	}
+	tick.BatteryVoltage, err = strconv.ParseFloat(parts[3], 64)
+	if err != nil {
+		return nil, err
+	}
+	tick.Sensor1, err = strconv.ParseInt(parts[4], 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	tick.Sensor2, err = strconv.ParseInt(parts[5], 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	tick.RadioQuality, err = strconv.ParseInt(parts[6], 10, 64)
+	if err != nil {
+		return nil, err
 	}
 	if len(parts) >= 8 {
 		tick.controllerID = parts[7]
@@ -568,9 +576,7 @@ func FindTicks(sensorID int64, startIndex, stopIndex int) (*PaginatedTicks, erro
 		if err := json.Unmarshal(b, &tick); err != nil {
 			return nil, err
 		}
-		if err := tick.decodeForVisual(); err != nil {
-			return nil, err
-		}
+		tick.decodeForVisual()
 		result.Ticks = append(result.Ticks, &tick)
 	}
 
@@ -578,18 +584,9 @@ func FindTicks(sensorID int64, startIndex, stopIndex int) (*PaginatedTicks, erro
 }
 
 // FIXME: do this when saving
-func (tick *Tick) decodeForVisual() error {
-	temperature, err := strconv.ParseInt(tick.Sensor1, 10, 32)
-	if err != nil {
-		return err
-	}
-	tick.Temperature = decodeTemperature(int32(temperature))
-	f, err := formatBatteryVoltage(tick.BatteryVoltage)
-	if err != nil {
-		return err
-	}
-	tick.BatteryVoltageVisual = f
-	return nil
+func (tick *Tick) decodeForVisual() {
+	tick.TemperatureVisual = decodeTemperature(int32(tick.Sensor1))
+	tick.BatteryVoltageVisual = tick.BatteryVoltage / 1000.0
 }
 
 func (tick Tick) Save() error {
@@ -614,7 +611,7 @@ func (tick Tick) key() string {
 }
 
 func (tick Tick) String() string {
-	return fmt.Sprintf("datetime: %v, sensor ID: %d, next: %s, battery: %s, sensor1: %s, sensor2: %s, radio: %s",
+	return fmt.Sprintf("datetime: %v, sensor ID: %d, next: %s, battery: %f, sensor1: %d, sensor2: %d, radio: %d",
 		tick.Datetime, tick.SensorID, tick.NextDataSession, tick.BatteryVoltage, tick.Sensor1, tick.Sensor2, tick.RadioQuality)
 }
 
@@ -676,14 +673,6 @@ func processTick(redisClient redis.Conn, s string) error {
 		return err
 	}
 	return nil
-}
-
-func formatBatteryVoltage(input string) (float64, error) {
-	value, err := strconv.ParseInt(input, 10, 64)
-	if err != nil {
-		return 0, err
-	}
-	return float64(value) / 1000.0, nil
 }
 
 func decodeTemperature(n int32) float64 {
