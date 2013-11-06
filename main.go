@@ -490,10 +490,10 @@ func averageMatching(ticks []*Tick, start time.Time, end time.Time) Tick {
 	var avgSensor2 int64
 	var avgRadioQuality int64
 	for _, tick := range ticks {
-		if tick.Datetime.Unix() < start.Unix() {
+		if tick.Datetime.Before(start) {
 			continue
 		}
-		if tick.Datetime.Unix() >= end.Unix() {
+		if tick.Datetime.After(end) {
 			continue
 		}
 		avgBatteryVoltage += tick.BatteryVoltage
@@ -508,14 +508,13 @@ func averageMatching(ticks []*Tick, start time.Time, end time.Time) Tick {
 		avgSensor1 /= matching
 		avgSensor2 /= matching
 	}
-	dot := Tick{
+	return Tick{
 		Datetime:       start,
 		BatteryVoltage: avgBatteryVoltage,
 		RadioQuality:   avgRadioQuality,
 		Sensor1:        avgSensor1,
 		Sensor2:        avgSensor2,
 	}
-	return dot
 }
 
 func getSensorTicks(w http.ResponseWriter, r *http.Request) {
