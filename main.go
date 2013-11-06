@@ -480,21 +480,11 @@ func getSensorDots(w http.ResponseWriter, r *http.Request) {
 	redisClient := redisPool.Get()
 	defer redisClient.Close()
 
-	bb, err := redisClient.Do("ZRANGEBYSCORE", keyOfSensorTicks(sensorID), start, end)
+	ticks, err := FindTicksByScore(sensorID, start, end)
 	if err != nil {
+		log.Println(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
-	}
-
-	var ticks []*Tick
-	for _, value := range bb.([]interface{}) {
-		tick, err := unmarshalTick(value.([]byte))
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		tick.decodeForVisual()
-		ticks = append(ticks, tick)
 	}
 
 	var dots []*Tick
@@ -565,44 +555,27 @@ func averageMatching(ticks []*Tick, start time.Time, end time.Time) Tick {
 
 func getSensorTicks(w http.ResponseWriter, r *http.Request) {
 	// Parse sensor ID
-	s, ok := mux.Vars(r)["sensor_id"]
-	if !ok || s == "" {
-		http.Error(w, "Missing sensor_id", http.StatusBadRequest)
-		return
-	}
-	sensorID, err := strconv.ParseInt(s, 10, 64)
+	sensorID, err := strconv.ParseInt(mux.Vars(r)["sensor_id"], 10, 64)
 	if err != nil {
-		log.Println(err)
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, "Missing or invalid sensor_id", http.StatusBadRequest)
 		return
 	}
 
 	// Parse start index of tick range
-	startIndexString := r.FormValue("start_index")
-	if startIndexString == "" {
-		startIndexString = "0"
-	}
-	startIndex, err := strconv.Atoi(startIndexString)
+	start, err := strconv.Atoi(r.FormValue("start"))
 	if err != nil {
-		log.Println(err)
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, "Missing or invalid start", http.StatusBadRequest)
 		return
 	}
 
 	// Parse stop index of tick range
-	stopIndexString := r.FormValue("stop_index")
-	if stopIndexString == "" {
-		stopIndexString = "9999999999"
-	}
-	stopIndex, err := strconv.Atoi(stopIndexString)
+	stop, err := strconv.Atoi(r.FormValue("stop"))
 	if err != nil {
-		log.Println(err)
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, "Missing or invalid stop", http.StatusBadRequest)
 		return
 	}
 
-	// Find ticks in the given start index - stop index range
-	result, err := FindTicksByRange(sensorID, startIndex, stopIndex)
+	result, err := FindTicksByScore(sensorID, start, stop)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -696,6 +669,27 @@ func FindTicksByRange(sensorID int64, startIndex, stopIndex int) (*PaginatedTick
 	}
 
 	return &result, nil
+}
+
+func FindTicksByScore(sensorID int64, start, end int) ([]*Tick, error) {
+	redisClient := redisPool.Get()
+	defer redisClient.Close()
+
+	bb, err := redisClient.Do("ZRANGEBYSCORE", keyOfSensorTicks(sensorID), start, end)
+	if err != nil {
+		return nil, err
+	}
+
+	var ticks []*Tick
+	for _, value := range bb.([]interface{}) {
+		tick, err := unmarshalTick(value.([]byte))
+		if err != nil {
+			return nil, err
+		}
+		tick.decodeForVisual()
+		ticks = append(ticks, tick)
+	}
+	return ticks, nil
 }
 
 // FIXME: do this when saving
