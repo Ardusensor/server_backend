@@ -34,6 +34,10 @@ const keyControllers = "osp:controllers"
 const keyLogs = "osp:logs"
 const keySensorToController = "osp:sensor_to_controller"
 
+func keyOfSensor(sensorID int64) string {
+	return fmt.Sprintf("osp:sensor:%d:fields", sensorID)
+}
+
 func keyOfController(controllerID string) string {
 	return "osp:controller:" + controllerID + ":fields"
 }
@@ -55,6 +59,8 @@ type (
 		ID           int64      `json:"id"`
 		LastTick     *time.Time `json:"last_tick,omitempty"`
 		ControllerID string     `json:"controller_id"`
+		Lat          string     `json:"lat,omitempty"`
+		Lng          string     `json:"lng,omitempty"`
 	}
 	Tick struct {
 		Datetime        time.Time `json:"datetime"`
@@ -87,6 +93,7 @@ func main() {
 	r.HandleFunc("/api/controllers/{controller_id}", putController).Methods("POST", "PUT")
 	r.HandleFunc("/api/controllers/{controller_id}", getController).Methods("GET")
 	r.HandleFunc("/api/controllers", getControllers).Methods("GET")
+	r.HandleFunc("/api/sensors/{sensor_id}", putSensor).Methods("POST", "PUT")
 	r.HandleFunc("/api/sensors/{sensor_id}/ticks", getSensorTicks).Methods("GET")
 	r.HandleFunc("/api/sensors/{sensor_id}/dots", getSensorDots).Methods("GET")
 	r.HandleFunc("/api/log", getLogs).Methods("GET")
@@ -289,6 +296,39 @@ func putController(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
+func putSensor(w http.ResponseWriter, r *http.Request) {
+	sensorID, err := strconv.ParseInt(mux.Vars(r)["sensor_id"], 10, 64)
+	if err != nil {
+		http.Error(w, "Missing or invalid sensor_id", http.StatusBadRequest)
+		return
+	}
+
+	defer r.Body.Close()
+	b, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	var sensor Sensor
+	if err := json.Unmarshal(b, &sensor); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	redisClient := redisPool.Get()
+	defer redisClient.Close()
+
+	_, err = redisClient.Do("HMSET", keyOfSensor(sensorID), "lat", sensor.Lat, "lng", sensor.Lng)
+	if err != nil {
+		log.Println(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
 func getControllerSensors(w http.ResponseWriter, r *http.Request) {
 	controllerID, ok := mux.Vars(r)["controller_id"]
 	if !ok {
@@ -316,8 +356,27 @@ func getControllerSensors(w http.ResponseWriter, r *http.Request) {
 		}
 		sensor := &Sensor{ID: sensorID, ControllerID: controllerID}
 
+		// Get lat, lng of sensor
+		bb, err := redisClient.Do("HMGET", keyOfSensor(sensorID), "lat", "lng")
+		if err != nil {
+			log.Println(err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if bb != nil {
+			list := bb.([]interface{})
+			if len(list) > 0 {
+				if list[0] != nil {
+					sensor.Lat = string(list[0].([]byte))
+				}
+				if list[1] != nil {
+					sensor.Lng = string(list[1].([]byte))
+				}
+			}
+		}
+
 		// Get last tick of sensor
-		bb, err := redisClient.Do("ZREVRANGE", keyOfSensorTicks(sensorID), 0, 0)
+		bb, err = redisClient.Do("ZREVRANGE", keyOfSensorTicks(sensorID), 0, 0)
 		if err != nil {
 			if err != redis.ErrNil {
 				log.Println(err)
