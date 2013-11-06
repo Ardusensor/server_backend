@@ -358,9 +358,6 @@ func NewTick(input string) (*Tick, error) {
 	if err != nil {
 		return nil, err
 	}
-	if len(parts) >= 8 {
-		tick.controllerID = parts[7]
-	}
 	return tick, err
 }
 
