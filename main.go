@@ -87,6 +87,7 @@ func main() {
 	r.HandleFunc("/api/controllers/{controller_id}", getController).Methods("GET")
 	r.HandleFunc("/api/controllers", getControllers).Methods("GET")
 	r.HandleFunc("/api/sensors/{sensor_id}/ticks", getSensorTicks).Methods("GET")
+	r.HandleFunc("/api/sensors/{sensor_id}/dots", getSensorDots).Methods("GET")
 	r.HandleFunc("/api/log", getLogs).Methods("GET")
 	r.HandleFunc("/api/logs", getLogs).Methods("GET")
 	http.Handle("/", r)
@@ -349,6 +350,71 @@ func getControllerSensors(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	w.Write(b)
+}
+
+func getSensorDots(w http.ResponseWriter, r *http.Request) {
+	// Parse sensor ID
+	s, ok := mux.Vars(r)["sensor_id"]
+	if !ok || s == "" {
+		http.Error(w, "Missing sensor_id", http.StatusBadRequest)
+		return
+	}
+	sensorID, err := strconv.ParseInt(s, 10, 64)
+	if err != nil {
+		log.Println(err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Parse start index of tick range
+	startIndex, err := strconv.Atoi(r.FormValue("start_index"))
+	if err != nil {
+		log.Println(err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Parse stop index of tick range
+	stopIndex, err := strconv.Atoi(r.FormValue("stop_index"))
+	if err != nil {
+		log.Println(err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Calculate average
+	dotsPerDay, err := strconv.Atoi(r.FormValue("dots_per_day"))
+	if err != nil {
+		log.Println(err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Find ticks in the given start index - stop index range
+	paginated, err := FindTicks(sensorID, startIndex, stopIndex)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	dots := paginated.Ticks
+
+	if dotsPerDay > 0 {
+		dots = findAverages(dots, dotsPerDay)
+	}
+
+	b, err := json.Marshal(dots)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write(b)
+}
+
+func findAverages(dots []*Tick, dotsPerDay int) []*Tick {
+	return nil
 }
 
 func getSensorTicks(w http.ResponseWriter, r *http.Request) {
