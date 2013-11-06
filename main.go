@@ -6,9 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/garyburd/redigo/redis"
-	"github.com/gorilla/mux"
 	"io"
-	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
@@ -84,17 +82,7 @@ func main() {
 	redisPool = getRedisPool(*redisHost)
 	defer redisPool.Close()
 
-	r := mux.NewRouter()
-	r.HandleFunc("/api/controllers/{controller_id}/sensors", getControllerSensors).Methods("GET")
-	r.HandleFunc("/api/controllers/{controller_id}", putController).Methods("POST", "PUT")
-	r.HandleFunc("/api/controllers/{controller_id}", getController).Methods("GET")
-	r.HandleFunc("/api/controllers", getControllers).Methods("GET")
-	r.HandleFunc("/api/sensors/{sensor_id}", putSensor).Methods("POST", "PUT")
-	r.HandleFunc("/api/sensors/{sensor_id}/ticks", getSensorTicks).Methods("GET")
-	r.HandleFunc("/api/sensors/{sensor_id}/dots", getSensorDots).Methods("GET")
-	r.HandleFunc("/api/log", getLogs).Methods("GET")
-	r.HandleFunc("/api/logs", getLogs).Methods("GET")
-	http.Handle("/", r)
+	defineRoutes()
 
 	if *environment == "production" || *environment == "staging" {
 		f, err := os.OpenFile(filepath.Join(*workdir, "log", *environment+".log"), os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0640)
@@ -227,186 +215,6 @@ func getControllers(w http.ResponseWriter, r *http.Request) {
 	w.Write(b)
 }
 
-func getController(w http.ResponseWriter, r *http.Request) {
-	log.Println(r)
-
-	controllerID, ok := mux.Vars(r)["controller_id"]
-	if !ok {
-		http.Error(w, "Missing controller_id", http.StatusBadRequest)
-		return
-	}
-
-	redisClient := redisPool.Get()
-	defer redisClient.Close()
-
-	controller := &Controller{ID: controllerID}
-	controllerName, err := redis.String(redisClient.Do("HGET", controller.key(), "name"))
-	if err != nil {
-		if err != redis.ErrNil {
-			log.Println(err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		controllerName = controller.ID
-	}
-	controller.Name = controllerName
-
-	b, err := json.Marshal(controller)
-	if err != nil {
-		log.Println(err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	w.WriteHeader(http.StatusOK)
-	w.Write(b)
-}
-
-func putController(w http.ResponseWriter, r *http.Request) {
-	log.Println(r)
-
-	controllerID, ok := mux.Vars(r)["controller_id"]
-	if !ok {
-		http.Error(w, "Missing controller_id", http.StatusBadRequest)
-		return
-	}
-
-	defer r.Body.Close()
-	b, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	var controller Controller
-	if err := json.Unmarshal(b, &controller); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	controller.ID = controllerID
-
-	redisClient := redisPool.Get()
-	defer redisClient.Close()
-
-	_, err = redisClient.Do("HSET", controller.key(), "name", controller.Name)
-	if err != nil {
-		log.Println(err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	w.WriteHeader(http.StatusOK)
-}
-
-func putSensor(w http.ResponseWriter, r *http.Request) {
-	log.Println(r)
-
-	sensorID, err := strconv.ParseInt(mux.Vars(r)["sensor_id"], 10, 64)
-	if err != nil {
-		http.Error(w, "Missing or invalid sensor_id", http.StatusBadRequest)
-		return
-	}
-
-	defer r.Body.Close()
-	b, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	var sensor Sensor
-	if err := json.Unmarshal(b, &sensor); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	redisClient := redisPool.Get()
-	defer redisClient.Close()
-
-	_, err = redisClient.Do("HMSET", keyOfSensor(sensorID), "lat", sensor.Lat, "lng", sensor.Lng)
-	if err != nil {
-		log.Println(err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	w.WriteHeader(http.StatusOK)
-}
-
-func getControllerSensors(w http.ResponseWriter, r *http.Request) {
-	log.Println(r)
-
-	controllerID, ok := mux.Vars(r)["controller_id"]
-	if !ok {
-		http.Error(w, "Missing controller_id", http.StatusBadRequest)
-		return
-	}
-
-	redisClient := redisPool.Get()
-	defer redisClient.Close()
-
-	ids, err := redis.Strings(redisClient.Do("SMEMBERS", keyOfControllerSensors(controllerID)))
-	if err != nil {
-		log.Println(err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	sensors := make([]*Sensor, 0)
-	for _, sensorID := range ids {
-		sensorID, err := strconv.ParseInt(sensorID, 10, 64)
-		if err != nil {
-			log.Println(err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		sensor := &Sensor{ID: sensorID, ControllerID: controllerID}
-
-		// Get lat, lng of sensor
-		bb, err := redisClient.Do("HMGET", keyOfSensor(sensorID), "lat", "lng")
-		if err != nil {
-			log.Println(err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		if bb != nil {
-			list := bb.([]interface{})
-			if len(list) > 0 {
-				if list[0] != nil {
-					sensor.Lat = string(list[0].([]byte))
-				}
-				if list[1] != nil {
-					sensor.Lng = string(list[1].([]byte))
-				}
-			}
-		}
-
-		// Get last tick of sensor
-		ticks, err := FindTicksByRange(sensorID, 0, 0)
-		if err != nil {
-			log.Println(err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		if len(ticks) > 0 {
-			sensor.LastTick = &ticks[0].Datetime
-
-		}
-
-		sensors = append(sensors, sensor)
-	}
-
-	b, err := json.Marshal(sensors)
-	if err != nil {
-		log.Println(err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	w.WriteHeader(http.StatusOK)
-	w.Write(b)
-}
-
 func unmarshalTick(b []byte) (*Tick, error) {
 	var values map[string]interface{}
 	if err := json.Unmarshal(b, &values); err != nil {
@@ -452,64 +260,6 @@ func parseInt(value interface{}) (int64, error) {
 		return int64(n), nil
 	}
 	return 0, nil
-}
-
-func getSensorDots(w http.ResponseWriter, r *http.Request) {
-	log.Println(r)
-
-	sensorID, err := strconv.ParseInt(mux.Vars(r)["sensor_id"], 10, 64)
-	if err != nil {
-		http.Error(w, "Invalid sensor_id", http.StatusBadRequest)
-		return
-	}
-
-	start, err := strconv.Atoi(r.FormValue("start"))
-	if err != nil {
-		http.Error(w, "Invalid start", http.StatusBadRequest)
-		return
-	}
-
-	end, err := strconv.Atoi(r.FormValue("end"))
-	if err != nil {
-		http.Error(w, "Invalid end", http.StatusBadRequest)
-		return
-	}
-
-	dotsPerDay, err := strconv.Atoi(r.FormValue("dots_per_day"))
-	if err != nil {
-		http.Error(w, "Invalid dots_per_day", http.StatusBadRequest)
-		return
-	}
-	if dotsPerDay < 0 || dotsPerDay > 24 {
-		http.Error(w, "dots_per_day must be in range 0-24", http.StatusBadRequest)
-		return
-	}
-
-	redisClient := redisPool.Get()
-	defer redisClient.Close()
-
-	ticks, err := FindTicksByScore(sensorID, start, end)
-	if err != nil {
-		log.Println(err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	var dots []*Tick
-	if dotsPerDay > 0 {
-		dots = findAverages(ticks, dotsPerDay, start, end)
-	} else {
-		dots = ticks
-	}
-
-	b, err := json.Marshal(dots)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	w.WriteHeader(http.StatusOK)
-	w.Write(b)
 }
 
 func findAverages(ticks []*Tick, dotsPerDay int, start int, end int) []*Tick {
@@ -559,43 +309,6 @@ func averageMatching(ticks []*Tick, start time.Time, end time.Time) Tick {
 		Sensor1:        avgSensor1,
 		Sensor2:        avgSensor2,
 	}
-}
-
-func getSensorTicks(w http.ResponseWriter, r *http.Request) {
-	log.Println(r)
-
-	sensorID, err := strconv.ParseInt(mux.Vars(r)["sensor_id"], 10, 64)
-	if err != nil {
-		http.Error(w, "Missing or invalid sensor_id", http.StatusBadRequest)
-		return
-	}
-
-	start, err := strconv.Atoi(r.FormValue("start"))
-	if err != nil {
-		http.Error(w, "Missing or invalid start", http.StatusBadRequest)
-		return
-	}
-
-	end, err := strconv.Atoi(r.FormValue("end"))
-	if err != nil {
-		http.Error(w, "Missing or invalid end", http.StatusBadRequest)
-		return
-	}
-
-	result, err := FindTicksByScore(sensorID, start, end)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	b, err := json.Marshal(result)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	w.WriteHeader(http.StatusOK)
-	w.Write(b)
 }
 
 func getRedisPool(host string) *redis.Pool {
