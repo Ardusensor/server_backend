@@ -490,10 +490,7 @@ func averageMatching(ticks []*Tick, start time.Time, end time.Time) Tick {
 	var avgSensor2 int64
 	var avgRadioQuality int64
 	for _, tick := range ticks {
-		if tick.Datetime.Before(start) {
-			continue
-		}
-		if tick.Datetime.After(end) {
+		if tick.Datetime.Before(start) || tick.Datetime.After(end) {
 			continue
 		}
 		avgBatteryVoltage += tick.BatteryVoltage
