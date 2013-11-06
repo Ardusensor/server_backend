@@ -376,27 +376,17 @@ func getControllerSensors(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Get last tick of sensor
-		bb, err = redisClient.Do("ZREVRANGE", keyOfSensorTicks(sensorID), 0, 0)
+		paginated, err := FindTicksByRange(sensorID, 0, 0)
 		if err != nil {
-			if err != redis.ErrNil {
-				log.Println(err)
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			bb = nil
+			log.Println(err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
 		}
-		if bb != nil {
-			list := bb.([]interface{})
-			if len(list) > 0 {
-				tick, err := unmarshalTick(list[0].([]byte))
-				if err != nil {
-					log.Println(err)
-					http.Error(w, err.Error(), http.StatusInternalServerError)
-					return
-				}
-				sensor.LastTick = &tick.Datetime
-			}
+		if len(paginated.Ticks) > 0 {
+			sensor.LastTick = &paginated.Ticks[0].Datetime
+
 		}
+
 		sensors = append(sensors, sensor)
 	}
 
@@ -612,7 +602,7 @@ func getSensorTicks(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Find ticks in the given start index - stop index range
-	result, err := FindTicks(sensorID, startIndex, stopIndex)
+	result, err := FindTicksByRange(sensorID, startIndex, stopIndex)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -681,7 +671,7 @@ func NewTick(input string) (*Tick, error) {
 	return tick, err
 }
 
-func FindTicks(sensorID int64, startIndex, stopIndex int) (*PaginatedTicks, error) {
+func FindTicksByRange(sensorID int64, startIndex, stopIndex int) (*PaginatedTicks, error) {
 	redisClient := redisPool.Get()
 	defer redisClient.Close()
 
