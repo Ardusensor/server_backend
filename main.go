@@ -119,7 +119,7 @@ func main() {
 		}
 	}()
 
-	log.Println("HTTP server started on port", *webserverPort)
+	log.Println("API started on port", *webserverPort)
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", *webserverPort), http.DefaultServeMux))
 }
 
@@ -353,36 +353,26 @@ func getControllerSensors(w http.ResponseWriter, r *http.Request) {
 }
 
 func getSensorDots(w http.ResponseWriter, r *http.Request) {
-	// Parse sensor ID
-	s, ok := mux.Vars(r)["sensor_id"]
-	if !ok || s == "" {
-		http.Error(w, "Missing sensor_id", http.StatusBadRequest)
-		return
-	}
-	sensorID, err := strconv.ParseInt(s, 10, 64)
+	sensorID, err := strconv.ParseInt(mux.Vars(r)["sensor_id"], 10, 64)
 	if err != nil {
-		log.Println(err)
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, "Invalid sensor_id", http.StatusBadRequest)
 		return
 	}
 
-	// Parse start index of tick range
-	startIndex, err := strconv.Atoi(r.FormValue("start_index"))
+	start, err := strconv.Atoi(r.FormValue("start"))
 	if err != nil {
 		log.Println(err)
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, "Invalid start", http.StatusBadRequest)
 		return
 	}
 
-	// Parse stop index of tick range
-	stopIndex, err := strconv.Atoi(r.FormValue("stop_index"))
+	end, err := strconv.Atoi(r.FormValue("end"))
 	if err != nil {
 		log.Println(err)
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, "Invalid end", http.StatusBadRequest)
 		return
 	}
 
-	// Calculate average
 	dotsPerDay, err := strconv.Atoi(r.FormValue("dots_per_day"))
 	if err != nil {
 		log.Println(err)
@@ -390,17 +380,35 @@ func getSensorDots(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Find ticks in the given start index - stop index range
-	paginated, err := FindTicks(sensorID, startIndex, stopIndex)
+	redisClient := redisPool.Get()
+	defer redisClient.Close()
+
+	bb, err := redisClient.Do("ZRANGEBYSCORE", keyOfSensorTicks(sensorID), start, end)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	dots := paginated.Ticks
+	var ticks []*Tick
+	for _, value := range bb.([]interface{}) {
+		b := value.([]byte)
+		var tick Tick
+		if err := json.Unmarshal(b, &tick); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if err := tick.decodeForVisual(); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		ticks = append(ticks, &tick)
+	}
 
+	var dots []*Tick
 	if dotsPerDay > 0 {
-		dots = findAverages(dots, dotsPerDay)
+		dots = findAverages(ticks, dotsPerDay)
+	} else {
+		dots = ticks
 	}
 
 	b, err := json.Marshal(dots)
@@ -413,8 +421,16 @@ func getSensorDots(w http.ResponseWriter, r *http.Request) {
 	w.Write(b)
 }
 
-func findAverages(dots []*Tick, dotsPerDay int) []*Tick {
-	return nil
+func findAverages(ticks []*Tick, dotsPerDay int) []*Tick {
+	// 6 dots means: 24h / 6 = 4 dots per day
+	// 12 dots means: 24h / 12 = 2 dots per day
+	var result []*Tick
+	for _, tick := range ticks {
+		hour := tick.Datetime.Hour() // 0-23
+		dotIndex := hour / dotsPerDay
+		log.Println("tick", tick.String(), "dot index", dotIndex)
+	}
+	return result
 }
 
 func getSensorTicks(w http.ResponseWriter, r *http.Request) {
@@ -534,20 +550,28 @@ func FindTicks(sensorID int64, startIndex, stopIndex int) (*PaginatedTicks, erro
 		if err := json.Unmarshal(b, &tick); err != nil {
 			return nil, err
 		}
-		temperature, err := strconv.ParseInt(tick.Sensor1, 10, 32)
-		if err != nil {
+		if err := tick.decodeForVisual(); err != nil {
 			return nil, err
 		}
-		tick.Temperature = decodeTemperature(int32(temperature))
-		f, err := formatBatteryVoltage(tick.BatteryVoltage)
-		if err != nil {
-			return nil, err
-		}
-		tick.BatteryVoltageVisual = f
 		result.Ticks = append(result.Ticks, &tick)
 	}
 
 	return &result, nil
+}
+
+// FIXME: do this when saving
+func (tick *Tick) decodeForVisual() error {
+	temperature, err := strconv.ParseInt(tick.Sensor1, 10, 32)
+	if err != nil {
+		return err
+	}
+	tick.Temperature = decodeTemperature(int32(temperature))
+	f, err := formatBatteryVoltage(tick.BatteryVoltage)
+	if err != nil {
+		return err
+	}
+	tick.BatteryVoltageVisual = f
+	return nil
 }
 
 func (tick Tick) Save() error {
@@ -559,11 +583,11 @@ func (tick Tick) Save() error {
 		return err
 	}
 
-	_, err = redisClient.Do("ZADD", tick.key(), tick.rank(), b)
+	_, err = redisClient.Do("ZADD", tick.key(), tick.score(), b)
 	return err
 }
 
-func (tick Tick) rank() float64 {
+func (tick Tick) score() float64 {
 	return float64(tick.Datetime.Unix())
 }
 
