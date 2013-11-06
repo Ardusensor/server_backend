@@ -569,13 +569,13 @@ func getSensorTicks(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Parse stop index of tick range
-	stop, err := strconv.Atoi(r.FormValue("stop"))
+	end, err := strconv.Atoi(r.FormValue("end"))
 	if err != nil {
-		http.Error(w, "Missing or invalid stop", http.StatusBadRequest)
+		http.Error(w, "Missing or invalid end", http.StatusBadRequest)
 		return
 	}
 
-	result, err := FindTicksByScore(sensorID, start, stop)
+	result, err := FindTicksByScore(sensorID, start, end)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
