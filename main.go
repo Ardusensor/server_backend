@@ -361,22 +361,23 @@ func getSensorDots(w http.ResponseWriter, r *http.Request) {
 
 	start, err := strconv.Atoi(r.FormValue("start"))
 	if err != nil {
-		log.Println(err)
 		http.Error(w, "Invalid start", http.StatusBadRequest)
 		return
 	}
 
 	end, err := strconv.Atoi(r.FormValue("end"))
 	if err != nil {
-		log.Println(err)
 		http.Error(w, "Invalid end", http.StatusBadRequest)
 		return
 	}
 
 	dotsPerDay, err := strconv.Atoi(r.FormValue("dots_per_day"))
 	if err != nil {
-		log.Println(err)
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, "Invalid dots_per_day", http.StatusBadRequest)
+		return
+	}
+	if dotsPerDay < 0 || dotsPerDay > 24 {
+		http.Error(w, "dots_per_day must be in range 0-24", http.StatusBadRequest)
 		return
 	}
 
@@ -406,7 +407,7 @@ func getSensorDots(w http.ResponseWriter, r *http.Request) {
 
 	var dots []*Tick
 	if dotsPerDay > 0 {
-		dots = findAverages(ticks, dotsPerDay)
+		dots = findAverages(ticks, dotsPerDay, start, end)
 	} else {
 		dots = ticks
 	}
@@ -421,15 +422,32 @@ func getSensorDots(w http.ResponseWriter, r *http.Request) {
 	w.Write(b)
 }
 
-func findAverages(ticks []*Tick, dotsPerDay int) []*Tick {
-	// 6 dots means: 24h / 6 = 4 dots per day
-	// 12 dots means: 24h / 12 = 2 dots per day
+func findAverages(ticks []*Tick, dotsPerDay int, start int, end int) []*Tick {
 	var result []*Tick
-	for _, tick := range ticks {
-		hour := tick.Datetime.Hour() // 0-23
-		dotIndex := hour / dotsPerDay
-		log.Println("tick", tick.String(), "dot index", dotIndex)
+
+	// 6 dots means: 24h / 6 = 4 hour increment
+	// 12 dots means: 24h / 12 = 2 hour increment
+	startTime := time.Unix(int64(start), 0)
+	endTime := time.Unix(int64(end), 0)
+
+	hours := 24 / dotsPerDay
+	increment := time.Duration(hours) * time.Hour
+
+	//index := 0
+
+	for startTime.Before(endTime) {
+		//key := startTime.Format("2006-01-02 15")
+		startTime = startTime.Add(increment)
+
+		var average *Tick
+		/*
+			for _, tick := range ticks {
+				//log.Println("tick", tick.String(), "dot index", dotIndex)
+			}
+		*/
+		result = append(result, average)
 	}
+
 	return result
 }
 
