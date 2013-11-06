@@ -188,6 +188,8 @@ func getLogs(w http.ResponseWriter, r *http.Request) {
 }
 
 func getControllers(w http.ResponseWriter, r *http.Request) {
+	log.Println(r)
+
 	redisClient := redisPool.Get()
 	defer redisClient.Close()
 
@@ -226,6 +228,8 @@ func getControllers(w http.ResponseWriter, r *http.Request) {
 }
 
 func getController(w http.ResponseWriter, r *http.Request) {
+	log.Println(r)
+
 	controllerID, ok := mux.Vars(r)["controller_id"]
 	if !ok {
 		http.Error(w, "Missing controller_id", http.StatusBadRequest)
@@ -259,6 +263,8 @@ func getController(w http.ResponseWriter, r *http.Request) {
 }
 
 func putController(w http.ResponseWriter, r *http.Request) {
+	log.Println(r)
+
 	controllerID, ok := mux.Vars(r)["controller_id"]
 	if !ok {
 		http.Error(w, "Missing controller_id", http.StatusBadRequest)
@@ -293,6 +299,8 @@ func putController(w http.ResponseWriter, r *http.Request) {
 }
 
 func putSensor(w http.ResponseWriter, r *http.Request) {
+	log.Println(r)
+
 	sensorID, err := strconv.ParseInt(mux.Vars(r)["sensor_id"], 10, 64)
 	if err != nil {
 		http.Error(w, "Missing or invalid sensor_id", http.StatusBadRequest)
@@ -326,6 +334,8 @@ func putSensor(w http.ResponseWriter, r *http.Request) {
 }
 
 func getControllerSensors(w http.ResponseWriter, r *http.Request) {
+	log.Println(r)
+
 	controllerID, ok := mux.Vars(r)["controller_id"]
 	if !ok {
 		http.Error(w, "Missing controller_id", http.StatusBadRequest)
@@ -445,6 +455,8 @@ func parseInt(value interface{}) (int64, error) {
 }
 
 func getSensorDots(w http.ResponseWriter, r *http.Request) {
+	log.Println(r)
+
 	sensorID, err := strconv.ParseInt(mux.Vars(r)["sensor_id"], 10, 64)
 	if err != nil {
 		http.Error(w, "Invalid sensor_id", http.StatusBadRequest)
@@ -550,21 +562,20 @@ func averageMatching(ticks []*Tick, start time.Time, end time.Time) Tick {
 }
 
 func getSensorTicks(w http.ResponseWriter, r *http.Request) {
-	// Parse sensor ID
+	log.Println(r)
+
 	sensorID, err := strconv.ParseInt(mux.Vars(r)["sensor_id"], 10, 64)
 	if err != nil {
 		http.Error(w, "Missing or invalid sensor_id", http.StatusBadRequest)
 		return
 	}
 
-	// Parse start index of tick range
 	start, err := strconv.Atoi(r.FormValue("start"))
 	if err != nil {
 		http.Error(w, "Missing or invalid start", http.StatusBadRequest)
 		return
 	}
 
-	// Parse stop index of tick range
 	end, err := strconv.Atoi(r.FormValue("end"))
 	if err != nil {
 		http.Error(w, "Missing or invalid end", http.StatusBadRequest)
