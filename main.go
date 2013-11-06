@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"github.com/garyburd/redigo/redis"
@@ -328,9 +329,8 @@ func getControllerSensors(w http.ResponseWriter, r *http.Request) {
 		if bb != nil {
 			list := bb.([]interface{})
 			if len(list) > 0 {
-				b := list[0]
-				var tick Tick
-				if err := json.Unmarshal(b.([]byte), &tick); err != nil {
+				tick, err := unmarshalTick(list[0].([]byte))
+				if err != nil {
 					log.Println(err)
 					http.Error(w, err.Error(), http.StatusInternalServerError)
 					return
@@ -350,6 +350,53 @@ func getControllerSensors(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	w.Write(b)
+}
+
+func unmarshalTick(b []byte) (*Tick, error) {
+	var values map[string]interface{}
+	if err := json.Unmarshal(b, &values); err != nil {
+		return nil, err
+	}
+	var tick Tick
+	var err error
+	if tick.Datetime, err = time.Parse(time.RFC3339, values["datetime"].(string)); err != nil {
+		return nil, err
+	}
+	if tick.SensorID, err = parseInt(values["sensor_id"]); err != nil {
+		return nil, err
+	}
+	tick.NextDataSession = values["next_data_session"].(string)
+	if tick.BatteryVoltage, err = parseFloat(values["battery_voltage"]); err != nil {
+		return nil, err
+	}
+	if tick.Sensor1, err = parseInt(values["sensor1"]); err != nil {
+		return nil, err
+	}
+	if tick.Sensor2, err = parseInt(values["sensor2"]); err != nil {
+		return nil, err
+	}
+	if tick.RadioQuality, err = parseInt(values["radio_quality"]); err != nil {
+		return nil, err
+	}
+	return &tick, nil
+}
+
+func parseFloat(value interface{}) (float64, error) {
+	if s, isString := value.(string); isString {
+		return strconv.ParseFloat(s, 64)
+	} else if n, isNumeric := value.(float64); isNumeric {
+		return float64(n), nil
+	}
+	return 0, errors.New("bad format")
+}
+
+func parseInt(value interface{}) (int64, error) {
+	if s, isString := value.(string); isString {
+		return strconv.ParseInt(s, 10, 64)
+	} else if n, isNumeric := value.(float64); isNumeric {
+		return int64(n), nil
+	}
+	return 0, errors.New("bad format")
 }
 
 func getSensorDots(w http.ResponseWriter, r *http.Request) {
@@ -392,14 +439,13 @@ func getSensorDots(w http.ResponseWriter, r *http.Request) {
 
 	var ticks []*Tick
 	for _, value := range bb.([]interface{}) {
-		b := value.([]byte)
-		var tick Tick
-		if err := json.Unmarshal(b, &tick); err != nil {
+		tick, err := unmarshalTick(value.([]byte))
+		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		tick.decodeForVisual()
-		ticks = append(ticks, &tick)
+		ticks = append(ticks, tick)
 	}
 
 	var dots []*Tick
@@ -429,22 +475,47 @@ func findAverages(ticks []*Tick, dotsPerDay int, start int, end int) []*Tick {
 	var result []*Tick
 	for startTime.Before(endTime) {
 		next := startTime.Add(increment)
-		matching := 0
-		averages := &Tick{Datetime: startTime}
-		for _, tick := range ticks {
-			if (tick.Datetime.Equal(startTime) || tick.Datetime.After(startTime)) && tick.Datetime.Before(next) {
-				averages.BatteryVoltage += tick.BatteryVoltage
-				averages.RadioQuality += tick.RadioQuality
-				averages.Sensor1 += tick.Sensor1
-				averages.Sensor2 += tick.Sensor2
-				matching += 1
-			}
-		}
-		averages.decodeForVisual()
-		result = append(result, averages)
+		dot := averageMatching(ticks, startTime, next)
+		dot.decodeForVisual()
+		result = append(result, &dot)
 		startTime = next
 	}
 	return result
+}
+
+func averageMatching(ticks []*Tick, start time.Time, end time.Time) Tick {
+	var matching int64
+	var avgBatteryVoltage float64
+	var avgSensor1 int64
+	var avgSensor2 int64
+	var avgRadioQuality int64
+	for _, tick := range ticks {
+		if tick.Datetime.Unix() < start.Unix() {
+			continue
+		}
+		if tick.Datetime.Unix() >= end.Unix() {
+			continue
+		}
+		avgBatteryVoltage += tick.BatteryVoltage
+		avgRadioQuality += tick.RadioQuality
+		avgSensor1 += tick.Sensor1
+		avgSensor2 += tick.Sensor2
+		matching += 1
+	}
+	if matching > 0 {
+		avgBatteryVoltage /= float64(matching)
+		avgRadioQuality /= matching
+		avgSensor1 /= matching
+		avgSensor2 /= matching
+	}
+	dot := Tick{
+		Datetime:       start,
+		BatteryVoltage: avgBatteryVoltage,
+		RadioQuality:   avgRadioQuality,
+		Sensor1:        avgSensor1,
+		Sensor2:        avgSensor2,
+	}
+	return dot
 }
 
 func getSensorTicks(w http.ResponseWriter, r *http.Request) {
@@ -571,13 +642,12 @@ func FindTicks(sensorID int64, startIndex, stopIndex int) (*PaginatedTicks, erro
 
 	result := PaginatedTicks{Total: total}
 	for _, value := range bb.([]interface{}) {
-		b := value.([]byte)
-		var tick Tick
-		if err := json.Unmarshal(b, &tick); err != nil {
+		tick, err := unmarshalTick(value.([]byte))
+		if err != nil {
 			return nil, err
 		}
 		tick.decodeForVisual()
-		result.Ticks = append(result.Ticks, &tick)
+		result.Ticks = append(result.Ticks, tick)
 	}
 
 	return &result, nil
