@@ -298,3 +298,62 @@ func getSensorTicks(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	w.Write(b)
 }
+
+func getLogs(w http.ResponseWriter, r *http.Request) {
+	redisClient := redisPool.Get()
+	defer redisClient.Close()
+
+	bb, err := redisClient.Do("LRANGE", keyLogs, 0, 1000)
+	if err != nil {
+		log.Println(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/plain")
+	for _, item := range bb.([]interface{}) {
+		s := string(item.([]byte))
+		w.Write([]byte(s))
+		w.Write([]byte("\n\r"))
+	}
+}
+
+func getControllers(w http.ResponseWriter, r *http.Request) {
+	log.Println(r)
+
+	redisClient := redisPool.Get()
+	defer redisClient.Close()
+
+	ids, err := redis.Strings(redisClient.Do("SMEMBERS", keyControllers))
+	if err != nil {
+		log.Println(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	controllers := make([]*Controller, 0)
+	for _, controllerID := range ids {
+		controller := &Controller{ID: controllerID}
+		controllerName, err := redis.String(redisClient.Do("HGET", controller.key(), "name"))
+		if err != nil {
+			if err != redis.ErrNil {
+				log.Println(err)
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			controllerName = controller.ID
+		}
+		controller.Name = controllerName
+		controllers = append(controllers, controller)
+	}
+
+	b, err := json.Marshal(controllers)
+	if err != nil {
+		log.Println(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write(b)
+}
