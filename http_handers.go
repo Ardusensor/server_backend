@@ -14,7 +14,7 @@ func defineRoutes() {
 	r := mux.NewRouter()
 	r.HandleFunc("/api/controllers/{controller_id}/sensors", getControllerSensors).Methods("GET")
 	r.HandleFunc("/api/controllers/{controller_id}", putController).Methods("POST", "PUT")
-	r.HandleFunc("/api/controllers/{controller_id}", getController).Methods("GET")
+	r.HandleFunc("/api/controllers/{controller_id}/{hash}", getController).Methods("GET")
 	// r.HandleFunc("/api/controllers", getControllers).Methods("GET")
 	r.HandleFunc("/api/sensors/{sensor_id}", putSensor).Methods("POST", "PUT")
 	r.HandleFunc("/api/sensors/{sensor_id}/ticks", getSensorTicks).Methods("GET")
@@ -32,11 +32,25 @@ func getController(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Missing controller_id", http.StatusBadRequest)
 		return
 	}
+	hashToken, ok := mux.Vars(r)["hash"]
+	if !ok {
+		http.Error(w, "Missing token hash", http.StatusBadRequest)
+		return
+	}
 
 	redisClient := redisPool.Get()
 	defer redisClient.Close()
 
-	controller := &Controller{ID: controllerID}
+	controller := &Controller{ID: controllerID, Token: hashToken}
+
+	controllerHash, err := redis.String(redisClient.Do("HGET", controller.key(), "token"))
+	if err != nil {
+		log.Println(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	} else if controllerHash != controller.Token {
+		http.Error(w, "Incorrect hash for this controller", http.StatusUnauthorized)
+	}
+
 	controllerName, err := redis.String(redisClient.Do("HGET", controller.key(), "name"))
 	if err != nil {
 		if err != redis.ErrNil {

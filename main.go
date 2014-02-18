@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/md5"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -50,8 +51,9 @@ func keyOfSensorTicks(sensorID int64) string {
 
 type (
 	Controller struct {
-		ID   string `json:"id"`
-		Name string `json:"name"`
+		ID    string `json:"id"`
+		Name  string `json:"name"`
+		Token string
 	}
 	Sensor struct {
 		ID           int64      `json:"id"`
@@ -382,6 +384,12 @@ func (controller Controller) key() string {
 	return keyOfController(controller.ID)
 }
 
+func (controller Controller) generateToken() string {
+	h := md5.New()
+	h.Write([]byte(fmt.Sprintf("OPEN%dSENSOR%dPLATFORM", controller.ID, controller.ID)))
+	return fmt.Sprintf("%x", h.Sum(nil))
+}
+
 func ProcessTicks(tickList string) (int, error) {
 	redisClient := redisPool.Get()
 	defer redisClient.Close()
@@ -425,10 +433,14 @@ func processTick(redisClient redis.Conn, s string) error {
 		tick.controllerID = "1"
 	}
 
-	if _, err := redisClient.Do("SADD", keyControllers, tick.controllerID); err != nil {
+	controller := &Controller{ID: tick.controllerID}
+	if _, err := redisClient.Do("SADD", keyControllers, controller.ID); err != nil {
 		return err
 	}
-	if _, err := redisClient.Do("HSET", keySensorToController, tick.SensorID, tick.controllerID); err != nil {
+	if _, err := redisClient.Do("HSET", controller.key(), "token", controller.generateToken()); err != nil {
+		return err
+	}
+	if _, err := redisClient.Do("HSET", keySensorToController, tick.SensorID, controller.ID); err != nil {
 		return err
 	}
 	if _, err := redisClient.Do("SADD",
