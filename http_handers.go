@@ -15,7 +15,7 @@ func defineRoutes() {
 	r.HandleFunc("/api/controllers/{controller_id}/sensors", getControllerSensors).Methods("GET")
 	r.HandleFunc("/api/controllers/{controller_id}", putController).Methods("POST", "PUT")
 	r.HandleFunc("/api/controllers/{controller_id}", getController).Methods("GET")
-	r.HandleFunc("/api/controllers", getControllers).Methods("GET")
+	// r.HandleFunc("/api/controllers", getControllers).Methods("GET")
 	r.HandleFunc("/api/sensors/{sensor_id}", putSensor).Methods("POST", "PUT")
 	r.HandleFunc("/api/sensors/{sensor_id}/ticks", getSensorTicks).Methods("GET")
 	r.HandleFunc("/api/sensors/{sensor_id}/dots", getSensorDots).Methods("GET")
