@@ -327,6 +327,7 @@ func getLogs(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")
 	for _, item := range bb.([]interface{}) {
 		s := string(item.([]byte))
+		s = strconv.Quote(s)
 		w.Write([]byte(s))
 		w.Write([]byte("\n\r"))
 	}
