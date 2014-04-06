@@ -20,8 +20,9 @@ import (
 )
 
 var (
-	port          = flag.Int("port", 8090, "TCP port to listen on")
-	webserverPort = flag.Int("webserver_port", 8084, "TCP port to listen on")
+	port          = flag.Int("port", 8090, "TCP upload port")
+	portv2        = flag.Int("portv2", 8091, "TCP upload format V2 port")
+	webserverPort = flag.Int("webserver_port", 8084, "HTTP port")
 	environment   = flag.String("environment", "development", "environment")
 	redisHost     = flag.String("redis", "127.0.0.1:6379", "host:ip of Redis instance")
 	workdir       = flag.String("workdir", ".", "workdir of API, where log folder resides etc")
@@ -97,27 +98,34 @@ func main() {
 
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
-	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
+	serveTCP(*port, NewTick)
+	serveTCP(*portv2, NewTickV2)
+
+	log.Println("API started on port", *webserverPort)
+	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", *webserverPort), http.DefaultServeMux))
+}
+
+type tickParser func(input string) (*Tick, error)
+
+func serveTCP(port int, parser tickParser) {
+	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		log.Fatal(err)
 	}
 	go func() {
-		log.Println("Upload server started on port", *port)
+		log.Println("Upload server started on port", port)
 		for {
 			conn, err := ln.Accept()
 			if err != nil {
 				log.Println("Error while accepting connection:", err)
 				continue
 			}
-			go handleConnection(conn)
+			go handleConnection(conn, parser)
 		}
 	}()
-
-	log.Println("API started on port", *webserverPort)
-	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", *webserverPort), http.DefaultServeMux))
 }
 
-func handleConnection(conn net.Conn) {
+func handleConnection(conn net.Conn, parser tickParser) {
 	defer conn.Close()
 	log.Println("New connection")
 	buf := &bytes.Buffer{}
@@ -151,7 +159,7 @@ func handleConnection(conn net.Conn) {
 	}()
 
 	start := time.Now()
-	count, err := ProcessTicks(buf.String())
+	count, err := ProcessTicks(buf.String(), parser)
 	if err != nil {
 		log.Println("Error while processing ticks:", err)
 		return
@@ -309,6 +317,42 @@ func NewTick(input string) (*Tick, error) {
 	return tick, err
 }
 
+func NewTickV2(input string) (*Tick, error) {
+	log.Println("NewTick v2, input: ", input)
+	contents := input[1 : len(input)-1]
+	parts := strings.Split(contents, ";")
+	datetime, err := time.Parse("2006-1-2 15:4:5", parts[0])
+	if err != nil {
+		return nil, err
+	}
+	sensorID, err := strconv.ParseInt(parts[1], 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	tick := &Tick{
+		Datetime:        datetime,
+		SensorID:        sensorID,
+		NextDataSession: parts[2],
+	}
+	tick.BatteryVoltage, err = strconv.ParseFloat(parts[3], 64)
+	if err != nil {
+		return nil, err
+	}
+	tick.Sensor1, err = strconv.ParseInt(parts[4], 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	tick.Sensor2, err = strconv.ParseInt(parts[5], 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	tick.RadioQuality, err = strconv.ParseInt(parts[6], 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	return tick, err
+}
+
 func FindTicksByRange(sensorID int64, startIndex, stopIndex int) ([]*Tick, error) {
 	redisClient := redisPool.Get()
 	defer redisClient.Close()
@@ -394,7 +438,7 @@ func (controller Controller) generateToken() string {
 	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
-func ProcessTicks(tickList string) (int, error) {
+func ProcessTicks(tickList string, parser tickParser) (int, error) {
 	redisClient := redisPool.Get()
 	defer redisClient.Close()
 
@@ -404,7 +448,7 @@ func ProcessTicks(tickList string) (int, error) {
 		if len(s) == 0 {
 			continue
 		}
-		err := processTick(redisClient, s)
+		err := processTick(redisClient, s, parser)
 		if err != nil {
 			return 0, err
 		}
@@ -414,8 +458,8 @@ func ProcessTicks(tickList string) (int, error) {
 	return processedCount, nil
 }
 
-func processTick(redisClient redis.Conn, s string) error {
-	tick, err := NewTick(s)
+func processTick(redisClient redis.Conn, s string, parser tickParser) error {
+	tick, err := parser(s)
 	if err != nil {
 		return err
 	}

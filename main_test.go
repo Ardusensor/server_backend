@@ -100,7 +100,7 @@ func TestProcessTicks(t *testing.T) {
 	defer redisPool.Close()
 	b, err := ioutil.ReadFile(filepath.Join("testdata", "testfile.txt"))
 	assert(t, err, equals, nil)
-	count, err := ProcessTicks(string(b))
+	count, err := ProcessTicks(string(b), NewTick)
 	assert(t, err, equals, nil)
 	assert(t, count, equals, 107)
 }
@@ -110,7 +110,7 @@ func TestProcessExample(t *testing.T) {
 	defer redisPool.Close()
 	b, err := ioutil.ReadFile(filepath.Join("testdata", "example.txt"))
 	assert(t, err, equals, nil)
-	count, err := ProcessTicks(string(b))
+	count, err := ProcessTicks(string(b), NewTick)
 	assert(t, err, equals, nil)
 	assert(t, count, equals, 5)
 }
@@ -118,7 +118,7 @@ func TestProcessExample(t *testing.T) {
 func TestProcessSingleLineExample(t *testing.T) {
 	redisPool = getRedisPool(*redisHost)
 	defer redisPool.Close()
-	count, err := ProcessTicks("<2013-4-7 10:24:39;426842;60;3135;6656;2312;126>")
+	count, err := ProcessTicks("<2013-4-7 10:24:39;426842;60;3135;6656;2312;126>", NewTick)
 	assert(t, err, equals, nil)
 	assert(t, count, equals, 1)
 }
@@ -126,7 +126,7 @@ func TestProcessSingleLineExample(t *testing.T) {
 func TestProcessSingleLineStartingWithR(t *testing.T) {
 	redisPool = getRedisPool(*redisHost)
 	defer redisPool.Close()
-	count, err := ProcessTicks("\r<2013-4-7 10:24:39;426842;60;3135;6656;2312;126>")
+	count, err := ProcessTicks("\r<2013-4-7 10:24:39;426842;60;3135;6656;2312;126>", NewTick)
 	assert(t, err, equals, nil)
 	assert(t, count, equals, 1)
 }
