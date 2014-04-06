@@ -189,18 +189,22 @@ func unmarshalTickJSON(b []byte) (*Tick, error) {
 }
 
 func parseFloat(value interface{}) (float64, error) {
-	if s, isString := value.(string); isString {
+	s, isString := value.(string)
+	if isString {
 		return strconv.ParseFloat(s, 64)
-	} else if n, isNumeric := value.(float64); isNumeric {
+	}
+	if n, isNumeric := value.(float64); isNumeric {
 		return float64(n), nil
 	}
 	return 0, nil
 }
 
 func parseInt(value interface{}) (int64, error) {
-	if s, isString := value.(string); isString {
+	s, isString := value.(string)
+	if isString {
 		return strconv.ParseInt(s, 10, 64)
-	} else if n, isNumeric := value.(float64); isNumeric {
+	}
+	if n, isNumeric := value.(float64); isNumeric {
 		return int64(n), nil
 	}
 	return 0, nil

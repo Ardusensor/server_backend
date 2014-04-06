@@ -47,7 +47,9 @@ func getController(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Println(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
-	} else if controllerHash != controller.Token {
+		return
+	}
+	if controllerHash != controller.Token {
 		http.Error(w, "Incorrect hash for this controller", http.StatusUnauthorized)
 	}
 
