@@ -98,7 +98,7 @@ func TestParseDateTimeMinutes(t *testing.T) {
 func TestProcessTicks(t *testing.T) {
 	redisPool = getRedisPool(*redisHost)
 	defer redisPool.Close()
-	b, err := ioutil.ReadFile(filepath.Join("test", "testfile.txt"))
+	b, err := ioutil.ReadFile(filepath.Join("testdata", "testfile.txt"))
 	assert(t, err, equals, nil)
 	count, err := ProcessTicks(string(b))
 	assert(t, err, equals, nil)
@@ -108,7 +108,7 @@ func TestProcessTicks(t *testing.T) {
 func TestProcessExample(t *testing.T) {
 	redisPool = getRedisPool(*redisHost)
 	defer redisPool.Close()
-	b, err := ioutil.ReadFile(filepath.Join("test", "example.txt"))
+	b, err := ioutil.ReadFile(filepath.Join("testdata", "example.txt"))
 	assert(t, err, equals, nil)
 	count, err := ProcessTicks(string(b))
 	assert(t, err, equals, nil)

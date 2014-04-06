@@ -4,3 +4,6 @@ osp_server: *.go
 
 test:
 	go test
+
+run:
+	go run main.go http_handers.go
