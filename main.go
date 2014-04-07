@@ -124,14 +124,14 @@ func serveTCP(port int, parser tickParser, keyLogs string) {
 				log.Println("Error while accepting connection:", err)
 				continue
 			}
-			go handleConnection(conn, parser, keyLogs)
+			go handleConnection(conn, port, parser, keyLogs)
 		}
 	}()
 }
 
-func handleConnection(conn net.Conn, parser tickParser, keyLogs string) {
+func handleConnection(conn net.Conn, port int, parser tickParser, keyLogs string) {
 	defer conn.Close()
-	log.Println("New connection")
+	log.Println("New connection on port", port)
 
 	ch := make(chan string, 1)
 	go func() {
