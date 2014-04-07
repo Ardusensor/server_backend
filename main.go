@@ -36,7 +36,7 @@ const keyLogsV1 = "osp:logs"
 const keyLogsV2 = "osp:logs:v2"
 const keySensorToController = "osp:sensor_to_controller"
 
-const socketTimeoutSeconds = 10
+const socketTimeoutSeconds = 30
 
 func keyOfSensor(sensorID int64) string {
 	return fmt.Sprintf("osp:sensor:%d:fields", sensorID)
