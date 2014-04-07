@@ -21,7 +21,7 @@ import (
 
 var (
 	port          = flag.Int("port", 8090, "TCP upload port")
-	portv2        = flag.Int("portv2", 8091, "TCP upload format V2 port")
+	portv2        = flag.Int("portv2", 18150, "TCP upload format V2 port")
 	webserverPort = flag.Int("webserver_port", 8084, "HTTP port")
 	environment   = flag.String("environment", "development", "environment")
 	redisHost     = flag.String("redis", "127.0.0.1:6379", "host:ip of Redis instance")
