@@ -2,12 +2,13 @@ package main
 
 import (
 	"encoding/json"
-	"github.com/garyburd/redigo/redis"
-	"github.com/gorilla/mux"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"strconv"
+
+	"github.com/garyburd/redigo/redis"
+	"github.com/gorilla/mux"
 )
 
 func defineRoutes() {
@@ -15,12 +16,20 @@ func defineRoutes() {
 	r.HandleFunc("/api/controllers/{controller_id}/sensors", getControllerSensors).Methods("GET")
 	r.HandleFunc("/api/controllers/{controller_id}", putController).Methods("POST", "PUT")
 	r.HandleFunc("/api/controllers/{controller_id}/{hash}", getController).Methods("GET")
-	// r.HandleFunc("/api/controllers", getControllers).Methods("GET")
+	// r.HandleFunc("/api/controllers", ).Methods("GET")
 	r.HandleFunc("/api/sensors/{sensor_id}", putSensor).Methods("POST", "PUT")
 	r.HandleFunc("/api/sensors/{sensor_id}/ticks", getSensorTicks).Methods("GET")
 	r.HandleFunc("/api/sensors/{sensor_id}/dots", getSensorDots).Methods("GET")
-	r.HandleFunc("/api/log", getLogs).Methods("GET")
-	r.HandleFunc("/api/logs", getLogs).Methods("GET")
+
+	// FIXME: deprecated
+	r.HandleFunc("/api/log", getLogsV1).Methods("GET")
+	r.HandleFunc("/api/logs", getLogsV1).Methods("GET")
+
+	r.HandleFunc("/api/v1/log", getLogsV1).Methods("GET")
+	r.HandleFunc("/api/v1/logs", getLogsV1).Methods("GET")
+	r.HandleFunc("/api/v2/log", getLogsV2).Methods("GET")
+	r.HandleFunc("/api/v2/logs", getLogsV2).Methods("GET")
+
 	http.Handle("/", r)
 }
 
@@ -315,11 +324,19 @@ func getSensorTicks(w http.ResponseWriter, r *http.Request) {
 	w.Write(b)
 }
 
-func getLogs(w http.ResponseWriter, r *http.Request) {
+func getLogsV1(w http.ResponseWriter, r *http.Request) {
+	getLogs(w, r, keyLogsV1)
+}
+
+func getLogsV2(w http.ResponseWriter, r *http.Request) {
+	getLogs(w, r, keyLogsV2)
+}
+
+func getLogs(w http.ResponseWriter, r *http.Request, key string) {
 	redisClient := redisPool.Get()
 	defer redisClient.Close()
 
-	bb, err := redisClient.Do("LRANGE", keyLogs, 0, 1000)
+	bb, err := redisClient.Do("LRANGE", key, 0, 1000)
 	if err != nil {
 		log.Println(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)

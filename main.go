@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/garyburd/redigo/redis"
 	"io"
 	"log"
 	"net"
@@ -17,11 +16,13 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/garyburd/redigo/redis"
 )
 
 var (
-	port          = flag.Int("port", 8090, "TCP upload port")
-	portv2        = flag.Int("portv2", 18150, "TCP upload format V2 port")
+	portV1        = flag.Int("port", 8090, "TCP upload port, V1 format")
+	portV2        = flag.Int("portv2", 18150, "TCP upload port, V2 format")
 	webserverPort = flag.Int("webserver_port", 8084, "HTTP port")
 	environment   = flag.String("environment", "development", "environment")
 	redisHost     = flag.String("redis", "127.0.0.1:6379", "host:ip of Redis instance")
@@ -31,8 +32,11 @@ var (
 var redisPool *redis.Pool
 
 const keyControllers = "osp:controllers"
-const keyLogs = "osp:logs"
+const keyLogsV1 = "osp:logs"
+const keyLogsV2 = "osp:logs:v2"
 const keySensorToController = "osp:sensor_to_controller"
+
+const socketTimeoutSeconds = 10
 
 func keyOfSensor(sensorID int64) string {
 	return fmt.Sprintf("osp:sensor:%d:fields", sensorID)
@@ -98,8 +102,8 @@ func main() {
 
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
-	serveTCP(*port, NewTick)
-	serveTCP(*portv2, NewTickV2)
+	serveTCP(*portV1, NewTick, keyLogsV1)
+	serveTCP(*portV2, NewTickV2, keyLogsV2)
 
 	log.Println("API started on port", *webserverPort)
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", *webserverPort), http.DefaultServeMux))
@@ -107,7 +111,7 @@ func main() {
 
 type tickParser func(input string) (*Tick, error)
 
-func serveTCP(port int, parser tickParser) {
+func serveTCP(port int, parser tickParser, keyLogs string) {
 	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		log.Fatal(err)
@@ -120,51 +124,72 @@ func serveTCP(port int, parser tickParser) {
 				log.Println("Error while accepting connection:", err)
 				continue
 			}
-			go handleConnection(conn, parser)
+			go handleConnection(conn, parser, keyLogs)
 		}
 	}()
 }
 
-func handleConnection(conn net.Conn, parser tickParser) {
+func handleConnection(conn net.Conn, parser tickParser, keyLogs string) {
 	defer conn.Close()
 	log.Println("New connection")
-	buf := &bytes.Buffer{}
-	for {
-		data := make([]byte, 256)
-		n, err := conn.Read(data)
-		if err != nil {
-			if err == io.EOF {
+
+	ch := make(chan string, 1)
+	go func() {
+		buf := &bytes.Buffer{}
+		for {
+			data := make([]byte, 256)
+			n, err := conn.Read(data)
+			if err != nil {
+				if err == io.EOF {
+					break
+				}
+				log.Println("Error while reading from connection:", err)
+				return
+			}
+			buf.Write(data[:n])
+			if data[0] == 13 && data[1] == 10 {
 				break
 			}
-			log.Println("Error while reading from connection:", err)
-			return
 		}
-		buf.Write(data[:n])
-		if data[0] == 13 && data[1] == 10 {
-			break
-		}
-	}
-
-	go func() {
-		redisClient := redisPool.Get()
-		defer redisClient.Close()
-		if _, err := redisClient.Do("LPUSH", keyLogs, time.Now().String()+" "+buf.String()); err != nil {
-			log.Println(err)
-			return
-		}
-		if _, err := redisClient.Do("LTRIM", keyLogs, 0, 1000); err != nil {
-			log.Println(err)
-			return
-		}
+		ch <- buf.String()
 	}()
 
+	timeout := make(chan bool, 1)
+	go func() {
+		time.Sleep(socketTimeoutSeconds * time.Second)
+		timeout <- true
+	}()
+
+	var payload string
+	select {
+	case payload = <-ch:
+		break
+	case <-timeout:
+		log.Println("Connection timeout!")
+		break
+	}
+
 	start := time.Now()
-	count, err := ProcessTicks(buf.String(), parser)
+	go logTick(payload, keyLogs)
+	count, err := ProcessTicks(payload, parser)
 	if err != nil {
 		log.Println("Error while processing ticks:", err)
 		return
 	}
 	log.Println("Processed", count, "ticks in", time.Since(start))
+}
+
+func logTick(payload string, keyLogs string) {
+	redisClient := redisPool.Get()
+	defer redisClient.Close()
+	if _, err := redisClient.Do("LPUSH", keyLogs, time.Now().String()+" "+payload); err != nil {
+		log.Println(err)
+		return
+	}
+	if _, err := redisClient.Do("LTRIM", keyLogs, 0, 1000); err != nil {
+		log.Println(err)
+		return
+	}
 }
 
 func unmarshalTickJSON(b []byte) (*Tick, error) {
