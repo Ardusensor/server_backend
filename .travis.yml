@@ -6,5 +6,8 @@ go:
 services:
  - redis
 
+before_script:
+- go get
+
 script:
  - go test -v
