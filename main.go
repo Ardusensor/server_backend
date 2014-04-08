@@ -37,6 +37,7 @@ const keyLogsV2 = "osp:logs:v2"
 const keySensorToController = "osp:sensor_to_controller"
 
 const socketTimeoutSeconds = 30
+const defaultControllerID = "1"
 
 func keyOfSensor(sensorID int64) string {
 	return fmt.Sprintf("osp:sensor:%d:fields", sensorID)
@@ -108,8 +109,8 @@ func main() {
 
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
-	serveTCP(*portV1, newTick, keyLogsV1)
-	serveTCP(*portV2, newTickV2, keyLogsV2)
+	serveTCP(*portV1, onUploadV1, keyLogsV1)
+	serveTCP(*portV2, onUploadV2, keyLogsV2)
 
 	log.Println("API started on port", *webserverPort)
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", *webserverPort), http.DefaultServeMux))
@@ -312,8 +313,8 @@ func getRedisPool(host string) *redis.Pool {
 	}
 }
 
-func newTick(input string) (*tick, error) {
-	log.Println("NewTick, input: ", input)
+func onUploadV1(input string) (*tick, error) {
+	log.Println("onUploadv1, input: ", input)
 	contents := input[1 : len(input)-1]
 	parts := strings.Split(contents, ";")
 	datetime, err := time.Parse("2006-1-2 15:4:5", parts[0])
@@ -348,7 +349,7 @@ func newTick(input string) (*tick, error) {
 	return t, err
 }
 
-func newTickV2(input string) (*tick, error) {
+func onUploadV2(input string) (*tick, error) {
 	log.Println("NewTick v2, input: ", input)
 	contents := input[1 : len(input)-1]
 	parts := strings.Split(contents, ";")
@@ -508,8 +509,8 @@ func processTick(redisClient redis.Conn, s string, parseTick tickParser) error {
 	}
 
 	if t.controllerID == "" {
-		log.Println("Achtung! Controller ID not found by sensor ID", t.SensorID, "saving tick to controller 1")
-		t.controllerID = "1"
+		log.Println("Achtung! Controller ID not found by sensor ID", t.SensorID, "saving tick to controller ", defaultControllerID)
+		t.controllerID = defaultControllerID
 	}
 
 	c := &controller{ID: t.controllerID}
