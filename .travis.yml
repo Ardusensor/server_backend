@@ -1,0 +1,10 @@
+language: go
+go:
+ - 1.2
+ - release
+
+services:
+ - redis
+
+script:
+ - go test -v
