@@ -1,5 +1,6 @@
+export GOPATH=$(shell pwd)
 
-osp_server: *.go
+osp_server: *.go lint
 	go fmt && go build
 
 test:
@@ -10,3 +11,9 @@ run:
 
 clean:
 	rm -f osp_server
+
+lint: bin/golint
+	bin/golint *.go
+
+bin/golint:
+	go get github.com/golang/lint/golint

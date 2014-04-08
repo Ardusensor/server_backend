@@ -55,19 +55,19 @@ func keyOfSensorTicks(sensorID int64) string {
 }
 
 type (
-	Controller struct {
+	controller struct {
 		ID    string `json:"id"`
 		Name  string `json:"name"`
 		Token string
 	}
-	Sensor struct {
+	sensor struct {
 		ID           int64      `json:"id"`
 		LastTick     *time.Time `json:"last_tick,omitempty"`
 		ControllerID string     `json:"controller_id"`
 		Lat          string     `json:"lat,omitempty"`
 		Lng          string     `json:"lng,omitempty"`
 	}
-	Tick struct {
+	tick struct {
 		Datetime        time.Time `json:"datetime"`
 		SensorID        int64     `json:"sensor_id,omitempty"`
 		NextDataSession string    `json:"next_data_session,omitempty"` // sec
@@ -102,14 +102,14 @@ func main() {
 
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
-	serveTCP(*portV1, NewTick, keyLogsV1)
-	serveTCP(*portV2, NewTickV2, keyLogsV2)
+	serveTCP(*portV1, newTick, keyLogsV1)
+	serveTCP(*portV2, newTickV2, keyLogsV2)
 
 	log.Println("API started on port", *webserverPort)
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", *webserverPort), http.DefaultServeMux))
 }
 
-type tickParser func(input string) (*Tick, error)
+type tickParser func(input string) (*tick, error)
 
 func serveTCP(port int, parser tickParser, keyLogs string) {
 	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
@@ -171,7 +171,7 @@ func handleConnection(conn net.Conn, port int, parser tickParser, keyLogs string
 
 	start := time.Now()
 	go logTick(payload, keyLogs)
-	count, err := ProcessTicks(payload, parser)
+	count, err := processTicks(payload, parser)
 	if err != nil {
 		log.Println("Error while processing ticks:", err)
 		return
@@ -192,33 +192,33 @@ func logTick(payload string, keyLogs string) {
 	}
 }
 
-func unmarshalTickJSON(b []byte) (*Tick, error) {
+func unmarshalTickJSON(b []byte) (*tick, error) {
 	var values map[string]interface{}
 	if err := json.Unmarshal(b, &values); err != nil {
 		return nil, err
 	}
-	var tick Tick
+	var t tick
 	var err error
-	if tick.Datetime, err = time.Parse(time.RFC3339, values["datetime"].(string)); err != nil {
+	if t.Datetime, err = time.Parse(time.RFC3339, values["datetime"].(string)); err != nil {
 		return nil, err
 	}
-	if tick.SensorID, err = parseInt(values["sensor_id"]); err != nil {
+	if t.SensorID, err = parseInt(values["sensor_id"]); err != nil {
 		return nil, fmt.Errorf("Invalid or missing sensor_id in JSON: %s", err.Error())
 	}
-	tick.NextDataSession = values["next_data_session"].(string)
-	if tick.BatteryVoltage, err = parseFloat(values["battery_voltage"]); err != nil {
+	t.NextDataSession = values["next_data_session"].(string)
+	if t.BatteryVoltage, err = parseFloat(values["battery_voltage"]); err != nil {
 		log.Println("Warning: Invalid or missing battery_voltage in JSON", err.Error())
 	}
-	if tick.Sensor1, err = parseInt(values["sensor1"]); err != nil {
+	if t.Sensor1, err = parseInt(values["sensor1"]); err != nil {
 		log.Println("Warning: Invalid or missing sensor1 in JSON", err.Error())
 	}
-	if tick.Sensor2, err = parseInt(values["sensor2"]); err != nil {
+	if t.Sensor2, err = parseInt(values["sensor2"]); err != nil {
 		log.Println("Warning: Invalid or missing sensor2 in JSON", err.Error())
 	}
-	if tick.RadioQuality, err = parseInt(values["radio_quality"]); err != nil {
+	if t.RadioQuality, err = parseInt(values["radio_quality"]); err != nil {
 		log.Println("Warning: Invalid or missing radio_quality in JSON", err.Error())
 	}
-	return &tick, nil
+	return &t, nil
 }
 
 func parseFloat(value interface{}) (float64, error) {
@@ -243,14 +243,14 @@ func parseInt(value interface{}) (int64, error) {
 	return 0, nil
 }
 
-func findAverages(ticks []*Tick, dotsPerDay int, start int, end int) []*Tick {
+func findAverages(ticks []*tick, dotsPerDay int, start int, end int) []*tick {
 	startTime := time.Unix(int64(start), 0)
 	endTime := time.Unix(int64(end), 0)
 	// 6 dots means: 24h / 6 = 4 hour increment
 	// 12 dots means: 24h / 12 = 2 hour increment
 	hours := 24 / dotsPerDay
 	increment := time.Duration(hours) * time.Hour
-	var result []*Tick
+	var result []*tick
 	for startTime.Before(endTime) {
 		next := startTime.Add(increment)
 		dot := averageMatching(ticks, startTime, next)
@@ -261,7 +261,7 @@ func findAverages(ticks []*Tick, dotsPerDay int, start int, end int) []*Tick {
 	return result
 }
 
-func averageMatching(ticks []*Tick, start time.Time, end time.Time) Tick {
+func averageMatching(ticks []*tick, start time.Time, end time.Time) tick {
 	var matching int64
 	var avgBatteryVoltage float64
 	var avgSensor1 int64
@@ -283,7 +283,7 @@ func averageMatching(ticks []*Tick, start time.Time, end time.Time) Tick {
 		avgSensor1 /= matching
 		avgSensor2 /= matching
 	}
-	return Tick{
+	return tick{
 		Datetime:       start,
 		BatteryVoltage: avgBatteryVoltage,
 		RadioQuality:   avgRadioQuality,
@@ -306,7 +306,7 @@ func getRedisPool(host string) *redis.Pool {
 	}
 }
 
-func NewTick(input string) (*Tick, error) {
+func newTick(input string) (*tick, error) {
 	log.Println("NewTick, input: ", input)
 	contents := input[1 : len(input)-1]
 	parts := strings.Split(contents, ";")
@@ -318,31 +318,31 @@ func NewTick(input string) (*Tick, error) {
 	if err != nil {
 		return nil, err
 	}
-	tick := &Tick{
+	t := &tick{
 		Datetime:        datetime,
 		SensorID:        sensorID,
 		NextDataSession: parts[2],
 	}
-	tick.BatteryVoltage, err = strconv.ParseFloat(parts[3], 64)
+	t.BatteryVoltage, err = strconv.ParseFloat(parts[3], 64)
 	if err != nil {
 		return nil, err
 	}
-	tick.Sensor1, err = strconv.ParseInt(parts[4], 10, 64)
+	t.Sensor1, err = strconv.ParseInt(parts[4], 10, 64)
 	if err != nil {
 		return nil, err
 	}
-	tick.Sensor2, err = strconv.ParseInt(parts[5], 10, 64)
+	t.Sensor2, err = strconv.ParseInt(parts[5], 10, 64)
 	if err != nil {
 		return nil, err
 	}
-	tick.RadioQuality, err = strconv.ParseInt(parts[6], 10, 64)
+	t.RadioQuality, err = strconv.ParseInt(parts[6], 10, 64)
 	if err != nil {
 		return nil, err
 	}
-	return tick, err
+	return t, err
 }
 
-func NewTickV2(input string) (*Tick, error) {
+func newTickV2(input string) (*tick, error) {
 	log.Println("NewTick v2, input: ", input)
 	contents := input[1 : len(input)-1]
 	parts := strings.Split(contents, ";")
@@ -354,31 +354,31 @@ func NewTickV2(input string) (*Tick, error) {
 	if err != nil {
 		return nil, err
 	}
-	tick := &Tick{
+	t := &tick{
 		Datetime:        datetime,
 		SensorID:        sensorID,
 		NextDataSession: parts[2],
 	}
-	tick.BatteryVoltage, err = strconv.ParseFloat(parts[3], 64)
+	t.BatteryVoltage, err = strconv.ParseFloat(parts[3], 64)
 	if err != nil {
 		return nil, err
 	}
-	tick.Sensor1, err = strconv.ParseInt(parts[4], 10, 64)
+	t.Sensor1, err = strconv.ParseInt(parts[4], 10, 64)
 	if err != nil {
 		return nil, err
 	}
-	tick.Sensor2, err = strconv.ParseInt(parts[5], 10, 64)
+	t.Sensor2, err = strconv.ParseInt(parts[5], 10, 64)
 	if err != nil {
 		return nil, err
 	}
-	tick.RadioQuality, err = strconv.ParseInt(parts[6], 10, 64)
+	t.RadioQuality, err = strconv.ParseInt(parts[6], 10, 64)
 	if err != nil {
 		return nil, err
 	}
-	return tick, err
+	return t, err
 }
 
-func FindTicksByRange(sensorID int64, startIndex, stopIndex int) ([]*Tick, error) {
+func findTicksByRange(sensorID int64, startIndex, stopIndex int) ([]*tick, error) {
 	redisClient := redisPool.Get()
 	defer redisClient.Close()
 
@@ -387,20 +387,20 @@ func FindTicksByRange(sensorID int64, startIndex, stopIndex int) ([]*Tick, error
 		return nil, err
 	}
 
-	var ticks []*Tick
+	var ticks []*tick
 	for _, value := range bb.([]interface{}) {
-		tick, err := unmarshalTickJSON(value.([]byte))
+		t, err := unmarshalTickJSON(value.([]byte))
 		if err != nil {
 			return nil, err
 		}
-		tick.decodeForVisual()
-		ticks = append(ticks, tick)
+		t.decodeForVisual()
+		ticks = append(ticks, t)
 	}
 
 	return ticks, nil
 }
 
-func FindTicksByScore(sensorID int64, start, end int) ([]*Tick, error) {
+func findTicksByScore(sensorID int64, start, end int) ([]*tick, error) {
 	redisClient := redisPool.Get()
 	defer redisClient.Close()
 
@@ -409,61 +409,61 @@ func FindTicksByScore(sensorID int64, start, end int) ([]*Tick, error) {
 		return nil, err
 	}
 
-	var ticks []*Tick
+	var ticks []*tick
 	for _, value := range bb.([]interface{}) {
-		tick, err := unmarshalTickJSON(value.([]byte))
+		t, err := unmarshalTickJSON(value.([]byte))
 		if err != nil {
 			return nil, err
 		}
-		tick.decodeForVisual()
-		ticks = append(ticks, tick)
+		t.decodeForVisual()
+		ticks = append(ticks, t)
 	}
 	return ticks, nil
 }
 
 // FIXME: do this when saving
-func (tick *Tick) decodeForVisual() {
-	tick.TemperatureVisual = decodeTemperature(int32(tick.Sensor1))
-	tick.BatteryVoltageVisual = tick.BatteryVoltage / 1000.0
+func (t *tick) decodeForVisual() {
+	t.TemperatureVisual = decodeTemperature(int32(t.Sensor1))
+	t.BatteryVoltageVisual = t.BatteryVoltage / 1000.0
 }
 
-func (tick Tick) Save() error {
+func (t tick) Save() error {
 	redisClient := redisPool.Get()
 	defer redisClient.Close()
 
-	b, err := json.Marshal(tick)
+	b, err := json.Marshal(t)
 	if err != nil {
 		return err
 	}
 
-	_, err = redisClient.Do("ZADD", tick.key(), tick.score(), b)
+	_, err = redisClient.Do("ZADD", t.key(), t.score(), b)
 	return err
 }
 
-func (tick Tick) score() float64 {
-	return float64(tick.Datetime.Unix())
+func (t tick) score() float64 {
+	return float64(t.Datetime.Unix())
 }
 
-func (tick Tick) key() string {
-	return keyOfSensorTicks(tick.SensorID)
+func (t tick) key() string {
+	return keyOfSensorTicks(t.SensorID)
 }
 
-func (tick Tick) String() string {
+func (t tick) String() string {
 	return fmt.Sprintf("datetime: %v, sensor ID: %d, next: %s, battery: %f, sensor1: %d, sensor2: %d, radio: %d",
-		tick.Datetime, tick.SensorID, tick.NextDataSession, tick.BatteryVoltage, tick.Sensor1, tick.Sensor2, tick.RadioQuality)
+		t.Datetime, t.SensorID, t.NextDataSession, t.BatteryVoltage, t.Sensor1, t.Sensor2, t.RadioQuality)
 }
 
-func (controller Controller) key() string {
-	return keyOfController(controller.ID)
+func (c controller) key() string {
+	return keyOfController(c.ID)
 }
 
-func (controller Controller) generateToken() string {
+func (c controller) generateToken() string {
 	h := md5.New()
-	h.Write([]byte(fmt.Sprintf("OPEN%dSENSOR%dPLATFORM", controller.ID, controller.ID)))
+	h.Write([]byte(fmt.Sprintf("OPEN%dSENSOR%dPLATFORM", c.ID, c.ID)))
 	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
-func ProcessTicks(tickList string, parser tickParser) (int, error) {
+func processTicks(tickList string, parser tickParser) (int, error) {
 	redisClient := redisPool.Get()
 	defer redisClient.Close()
 
@@ -483,41 +483,41 @@ func ProcessTicks(tickList string, parser tickParser) (int, error) {
 	return processedCount, nil
 }
 
-func processTick(redisClient redis.Conn, s string, parser tickParser) error {
-	tick, err := parser(s)
+func processTick(redisClient redis.Conn, s string, parseTick tickParser) error {
+	t, err := parseTick(s)
 	if err != nil {
 		return err
 	}
-	if err := tick.Save(); err != nil {
+	if err := t.Save(); err != nil {
 		return err
 	}
-	log.Println("Saved:", tick)
+	log.Println("Saved:", t)
 
-	if tick.controllerID == "" {
-		id, err := redis.String(redisClient.Do("HGET", keySensorToController, tick.SensorID))
+	if t.controllerID == "" {
+		id, err := redis.String(redisClient.Do("HGET", keySensorToController, t.SensorID))
 		if err != nil && err != redis.ErrNil {
 			return err
 		}
-		tick.controllerID = id
+		t.controllerID = id
 	}
 
-	if tick.controllerID == "" {
-		log.Println("Achtung! Controller ID not found by sensor ID", tick.SensorID, "saving tick to controller 1")
-		tick.controllerID = "1"
+	if t.controllerID == "" {
+		log.Println("Achtung! Controller ID not found by sensor ID", t.SensorID, "saving tick to controller 1")
+		t.controllerID = "1"
 	}
 
-	controller := &Controller{ID: tick.controllerID}
-	if _, err := redisClient.Do("SADD", keyControllers, controller.ID); err != nil {
+	c := &controller{ID: t.controllerID}
+	if _, err := redisClient.Do("SADD", keyControllers, c.ID); err != nil {
 		return err
 	}
-	if _, err := redisClient.Do("HSET", controller.key(), "token", controller.generateToken()); err != nil {
+	if _, err := redisClient.Do("HSET", c.key(), "token", c.generateToken()); err != nil {
 		return err
 	}
-	if _, err := redisClient.Do("HSET", keySensorToController, tick.SensorID, controller.ID); err != nil {
+	if _, err := redisClient.Do("HSET", keySensorToController, t.SensorID, c.ID); err != nil {
 		return err
 	}
 	if _, err := redisClient.Do("SADD",
-		keyOfControllerSensors(tick.controllerID), fmt.Sprintf("%d", tick.SensorID)); err != nil {
+		keyOfControllerSensors(t.controllerID), fmt.Sprintf("%d", t.SensorID)); err != nil {
 		return err
 	}
 	return nil
