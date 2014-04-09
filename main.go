@@ -120,7 +120,7 @@ func main() {
 
 type upload struct {
 	ticks []*tick
-	cr    *controllerReading
+	cr    controllerReading
 }
 
 type uploadHandler func(buf *bytes.Buffer) (*upload, error)
@@ -422,8 +422,9 @@ func parseMessages(buf *bytes.Buffer) ([]string, error) {
 }
 
 func parseControllerReading(input string) (*controllerReading, error) {
-	return nil, nil
-	c := &controllerReading{}
+	c := &controllerReading{
+		Datetime: time.Now(),
+	}
 
 	parts := strings.Split(input, ";")
 	if len(parts) != 3 {
@@ -466,7 +467,7 @@ func handleUploadV2(buf *bytes.Buffer) (*upload, error) {
 		return nil, err
 	}
 	result := &upload{
-		cr:    cr,
+		cr:    *cr,
 		ticks: ticks,
 	}
 	return result, nil

@@ -136,11 +136,8 @@ func (s *TestSuite) TestHandleV2(c *C) {
 	c.Assert(tk.Sendcounter, Equals, int64(51))
 	c.Assert(tk.Datetime.Unix(), Equals, now.Unix())
 
-	c.Assert(u.cr, Not(Equals), nil)
-	/*
-		c.Assert(u.cr.ControllerID, Equals, "13")
-		c.Assert(u.cr.GSMCoverage, Equals, "22")
-		c.Assert(u.cr.BatteryVoltage, Equals, "196")
-		c.Assert(u.cr.Datetime.Unix(), Equals, now.Unix())
-	*/
+	c.Assert(u.cr.ControllerID, Equals, "13")
+	c.Assert(u.cr.GSMCoverage, Equals, int64(22))
+	c.Assert(u.cr.BatteryVoltage, Equals, float64(196))
+	c.Assert(u.cr.Datetime.Unix(), Equals, now.Unix())
 }
