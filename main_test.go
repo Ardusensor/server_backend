@@ -141,3 +141,34 @@ func (s *TestSuite) TestHandleV2(c *C) {
 	c.Assert(u.cr.BatteryVoltage, Equals, float64(196))
 	c.Assert(u.cr.Datetime.Unix(), Equals, now.Unix())
 }
+
+func (s *TestSuite) TestHandleV2withSpaces(c *C) {
+	now := time.Now()
+	u, err := handleUploadV2(bytes.NewBufferString("<10;344;875;195;49>                <12;350;895;159;18>(34204)<10;344;875;195;49>                <12;350;895;159;18>(411279)<12;350;895;159;18>(525538)<13;347;888;195;57>(1101950)<17;343;883;159;51>(1229059)<16;145;379;159;17>(1253399)<11;338;879;287;16>(1416289)<15;345;1023;211;17>(1515808)<13;21;350>"))
+	c.Assert(err, Equals, nil)
+	c.Assert(u, Not(Equals), nil)
+	c.Assert(len(u.ticks), Equals, 10)
+
+	tk := u.ticks[0]
+	c.Assert(tk.controllerID, Equals, "13")
+	c.Assert(tk.SensorID, Equals, int64(10))
+	c.Assert(tk.Temperature, Equals, int64(344))
+	c.Assert(tk.BatteryVoltage, Equals, float64(875))
+	c.Assert(tk.Humidity, Equals, int64(195))
+	c.Assert(tk.Sendcounter, Equals, int64(49))
+	c.Assert(tk.Datetime.Unix(), Equals, now.Unix())
+
+	tk = u.ticks[len(u.ticks)-1]
+	c.Assert(tk.controllerID, Equals, "13")
+	c.Assert(tk.SensorID, Equals, int64(15))
+	c.Assert(tk.Temperature, Equals, int64(345))
+	c.Assert(tk.BatteryVoltage, Equals, float64(1023))
+	c.Assert(tk.Humidity, Equals, int64(211))
+	c.Assert(tk.Sendcounter, Equals, int64(17))
+	c.Assert(tk.Datetime.Unix(), Equals, now.Unix())
+
+	c.Assert(u.cr.ControllerID, Equals, "13")
+	c.Assert(u.cr.GSMCoverage, Equals, int64(21))
+	c.Assert(u.cr.BatteryVoltage, Equals, float64(350))
+	c.Assert(u.cr.Datetime.Unix(), Equals, now.Unix())
+}

@@ -466,6 +466,13 @@ func handleUploadV2(buf *bytes.Buffer) (*upload, error) {
 	if err != nil {
 		return nil, err
 	}
+	for _, t := range ticks {
+		t.controllerID = cr.ControllerID
+	}
+	err = saveTicks(ticks)
+	if err != nil {
+		return nil, err
+	}
 	result := &upload{
 		cr:    *cr,
 		ticks: ticks,
@@ -602,17 +609,27 @@ func parseTicks(input []string, parse tickParser) ([]*tick, error) {
 		if err != nil {
 			return nil, err
 		}
-		if err := t.Save(); err != nil {
-			return nil, err
-		}
 		result = append(result, t)
 	}
 	return result, nil
 }
 
+func saveTicks(ticks []*tick) error {
+	for _, t := range ticks {
+		if err := t.Save(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func handleUploadV1(buf *bytes.Buffer) (*upload, error) {
 	input := strings.Split(strings.Replace(buf.String(), "\r", "\n", -1), "\n")
 	ticks, err := parseTicks(input, parseTickV1)
+	if err != nil {
+		return nil, err
+	}
+	err = saveTicks(ticks)
 	if err != nil {
 		return nil, err
 	}
