@@ -325,11 +325,11 @@ func getSensorTicks(w http.ResponseWriter, r *http.Request) {
 }
 
 func getLogsV1(w http.ResponseWriter, r *http.Request) {
-	getLogs(w, r, keyLogsV1)
+	getLogs(w, r, loggingKeyV1)
 }
 
 func getLogsV2(w http.ResponseWriter, r *http.Request) {
-	getLogs(w, r, keyLogsV2)
+	getLogs(w, r, loggingKeyV2)
 }
 
 func getLogs(w http.ResponseWriter, r *http.Request, key string) {

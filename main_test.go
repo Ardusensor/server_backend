@@ -25,7 +25,7 @@ func assert(t *testing.T, a interface{}, mustEqual bool, b interface{}) {
 func TestParseTick(t *testing.T) {
 	redisPool = getRedisPool(*redisHost)
 	defer redisPool.Close()
-	entry, err := onUploadV1("<2012-12-26 12:46:5;75942;60;3158;5632;1584;144>")
+	entry, err := parseTickV1("<2012-12-26 12:46:5;75942;60;3158;5632;1584;144>")
 	assert(t, err, equals, nil)
 	assert(t, entry, !equals, nil)
 	assert(t, fmt.Sprintf("%d", entry.SensorID), equals, "75942")
@@ -39,7 +39,7 @@ func TestParseTick(t *testing.T) {
 func TestParseDateTime(t *testing.T) {
 	redisPool = getRedisPool(*redisHost)
 	defer redisPool.Close()
-	entry, err := onUploadV1("<2012-12-26 12:46:5;75942;60;3158;5632;1584;144>")
+	entry, err := parseTickV1("<2012-12-26 12:46:5;75942;60;3158;5632;1584;144>")
 	assert(t, err, equals, nil)
 	assert(t, entry, !equals, nil)
 	assert(t, entry.Datetime.Year(), equals, 2012)
@@ -55,7 +55,7 @@ func TestParseDateTime(t *testing.T) {
 func TestParseDateTimeMonthAndDayNotPadded(t *testing.T) {
 	redisPool = getRedisPool(*redisHost)
 	defer redisPool.Close()
-	entry, err := onUploadV1("<2012-2-5 12:46:5;75942;60;3158;5632;1584;144>")
+	entry, err := parseTickV1("<2012-2-5 12:46:5;75942;60;3158;5632;1584;144>")
 	assert(t, err, equals, nil)
 	assert(t, entry, !equals, nil)
 	assert(t, entry.Datetime.Year(), equals, 2012)
@@ -71,7 +71,7 @@ func TestParseDateTimeMonthAndDayNotPadded(t *testing.T) {
 func TestParseDateTimeWithPaddedSeconds(t *testing.T) {
 	redisPool = getRedisPool(*redisHost)
 	defer redisPool.Close()
-	entry, err := onUploadV1("<2012-12-26 12:46:05;75942;60;3158;5632;1584;144>")
+	entry, err := parseTickV1("<2012-12-26 12:46:05;75942;60;3158;5632;1584;144>")
 	assert(t, err, equals, nil)
 	assert(t, entry, !equals, nil)
 	assert(t, entry.Datetime.Second(), equals, 5)
@@ -80,7 +80,7 @@ func TestParseDateTimeWithPaddedSeconds(t *testing.T) {
 func TestParseDateTimeSeconds(t *testing.T) {
 	redisPool = getRedisPool(*redisHost)
 	defer redisPool.Close()
-	entry, err := onUploadV1("<2012-12-26 12:46:35;75942;60;3158;5632;1584;144>")
+	entry, err := parseTickV1("<2012-12-26 12:46:35;75942;60;3158;5632;1584;144>")
 	assert(t, err, equals, nil)
 	assert(t, entry, !equals, nil)
 	assert(t, entry.Datetime.Second(), equals, 35)
@@ -89,7 +89,7 @@ func TestParseDateTimeSeconds(t *testing.T) {
 func TestParseDateTimeMinutes(t *testing.T) {
 	redisPool = getRedisPool(*redisHost)
 	defer redisPool.Close()
-	entry, err := onUploadV1("<2012-12-26 13:2:36;75942;10;3202;6784;1580;150>")
+	entry, err := parseTickV1("<2012-12-26 13:2:36;75942;10;3202;6784;1580;150>")
 	assert(t, err, equals, nil)
 	assert(t, entry, !equals, nil)
 	assert(t, entry.Datetime.Minute(), equals, 2)
@@ -100,9 +100,9 @@ func TestProcessTicks(t *testing.T) {
 	defer redisPool.Close()
 	b, err := ioutil.ReadFile(filepath.Join("testdata", "testfile.txt"))
 	assert(t, err, equals, nil)
-	count, err := processTicks(string(b), onUploadV1)
+	u, err := handleUploadV1(string(b))
 	assert(t, err, equals, nil)
-	assert(t, count, equals, 107)
+	assert(t, len(u.ticks), equals, 107)
 }
 
 func TestProcessExample(t *testing.T) {
@@ -110,25 +110,25 @@ func TestProcessExample(t *testing.T) {
 	defer redisPool.Close()
 	b, err := ioutil.ReadFile(filepath.Join("testdata", "example.txt"))
 	assert(t, err, equals, nil)
-	count, err := processTicks(string(b), onUploadV1)
+	u, err := handleUploadV1(string(b))
 	assert(t, err, equals, nil)
-	assert(t, count, equals, 5)
+	assert(t, len(u.ticks), equals, 5)
 }
 
 func TestProcessSingleLineExample(t *testing.T) {
 	redisPool = getRedisPool(*redisHost)
 	defer redisPool.Close()
-	count, err := processTicks("<2013-4-7 10:24:39;426842;60;3135;6656;2312;126>", onUploadV1)
+	u, err := handleUploadV1("<2013-4-7 10:24:39;426842;60;3135;6656;2312;126>")
 	assert(t, err, equals, nil)
-	assert(t, count, equals, 1)
+	assert(t, len(u.ticks), equals, 1)
 }
 
 func TestProcessSingleLineStartingWithR(t *testing.T) {
 	redisPool = getRedisPool(*redisHost)
 	defer redisPool.Close()
-	count, err := processTicks("\r<2013-4-7 10:24:39;426842;60;3135;6656;2312;126>", onUploadV1)
+	u, err := handleUploadV1("\r<2013-4-7 10:24:39;426842;60;3135;6656;2312;126>")
 	assert(t, err, equals, nil)
-	assert(t, count, equals, 1)
+	assert(t, len(u.ticks), equals, 1)
 }
 
 func TestDecodeTemperature(t *testing.T) {

@@ -32,8 +32,8 @@ var (
 var redisPool *redis.Pool
 
 const keyControllers = "osp:controllers"
-const keyLogsV1 = "osp:logs"
-const keyLogsV2 = "osp:logs:v2"
+const loggingKeyV1 = "osp:logs"
+const loggingKeyV2 = "osp:logs:v2"
 const keySensorToController = "osp:sensor_to_controller"
 
 const socketTimeoutSeconds = 30
@@ -109,16 +109,21 @@ func main() {
 
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
-	serveTCP(*portV1, onUploadV1, keyLogsV1)
-	serveTCP(*portV2, onUploadV2, keyLogsV2)
+	serveTCP(*portV1, handleUploadV1, loggingKeyV1)
+	serveTCP(*portV2, handleUploadV2, loggingKeyV2)
 
 	log.Println("API started on port", *webserverPort)
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", *webserverPort), http.DefaultServeMux))
 }
 
-type tickParser func(input string) (*tick, error)
+type upload struct {
+	ticks []*tick
+	cr    controllerReading
+}
 
-func serveTCP(port int, parser tickParser, keyLogs string) {
+type uploadHandler func(input string) (*upload, error)
+
+func serveTCP(port int, handler uploadHandler, loggingKey string) {
 	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		log.Fatal(err)
@@ -131,12 +136,12 @@ func serveTCP(port int, parser tickParser, keyLogs string) {
 				log.Println("Error while accepting connection:", err)
 				continue
 			}
-			go handleConnection(conn, port, parser, keyLogs)
+			go handleConnection(conn, port, handler, loggingKey)
 		}
 	}()
 }
 
-func handleConnection(conn net.Conn, port int, parser tickParser, keyLogs string) {
+func handleConnection(conn net.Conn, port int, handler uploadHandler, loggingKey string) {
 	defer conn.Close()
 	log.Println("New connection on port", port)
 
@@ -176,24 +181,25 @@ func handleConnection(conn net.Conn, port int, parser tickParser, keyLogs string
 		break
 	}
 
+	go logUpload(payload, loggingKey)
+
 	start := time.Now()
-	go logTick(payload, keyLogs)
-	count, err := processTicks(payload, parser)
+	upload, err := handler(payload)
 	if err != nil {
 		log.Println("Error while processing ticks:", err)
 		return
 	}
-	log.Println("Processed", count, "ticks in", time.Since(start))
+	log.Println("Processed", upload, "in", time.Since(start))
 }
 
-func logTick(payload string, keyLogs string) {
+func logUpload(payload string, loggingKey string) {
 	redisClient := redisPool.Get()
 	defer redisClient.Close()
-	if _, err := redisClient.Do("LPUSH", keyLogs, time.Now().String()+" "+payload); err != nil {
+	if _, err := redisClient.Do("LPUSH", loggingKey, time.Now().String()+" "+payload); err != nil {
 		log.Println(err)
 		return
 	}
-	if _, err := redisClient.Do("LTRIM", keyLogs, 0, 1000); err != nil {
+	if _, err := redisClient.Do("LTRIM", loggingKey, 0, 1000); err != nil {
 		log.Println(err)
 		return
 	}
@@ -313,8 +319,7 @@ func getRedisPool(host string) *redis.Pool {
 	}
 }
 
-func onUploadV1(input string) (*tick, error) {
-	log.Println("onUploadv1, input: ", input)
+func parseTickV1(input string) (*tick, error) {
 	contents := input[1 : len(input)-1]
 	parts := strings.Split(contents, ";")
 	datetime, err := time.Parse("2006-1-2 15:4:5", parts[0])
@@ -346,43 +351,13 @@ func onUploadV1(input string) (*tick, error) {
 	if err != nil {
 		return nil, err
 	}
-	return t, err
+	return t, nil
 }
 
-func onUploadV2(input string) (*tick, error) {
-	log.Println("NewTick v2, input: ", input)
-	contents := input[1 : len(input)-1]
-	parts := strings.Split(contents, ";")
-	datetime, err := time.Parse("2006-1-2 15:4:5", parts[0])
-	if err != nil {
-		return nil, err
-	}
-	sensorID, err := strconv.ParseInt(parts[1], 10, 64)
-	if err != nil {
-		return nil, err
-	}
-	t := &tick{
-		Datetime:        datetime,
-		SensorID:        sensorID,
-		NextDataSession: parts[2],
-	}
-	t.BatteryVoltage, err = strconv.ParseFloat(parts[3], 64)
-	if err != nil {
-		return nil, err
-	}
-	t.Temperature, err = strconv.ParseInt(parts[4], 10, 64)
-	if err != nil {
-		return nil, err
-	}
-	t.Humidity, err = strconv.ParseInt(parts[5], 10, 64)
-	if err != nil {
-		return nil, err
-	}
-	t.RadioQuality, err = strconv.ParseInt(parts[6], 10, 64)
-	if err != nil {
-		return nil, err
-	}
-	return t, err
+func handleUploadV2(input string) (*upload, error) {
+	log.Println("handleUploadV2 v2, input: ", input)
+	result := &upload{}
+	return result, nil
 }
 
 func findTicksByRange(sensorID int64, startIndex, stopIndex int) ([]*tick, error) {
@@ -444,61 +419,9 @@ func (t tick) Save() error {
 	}
 
 	_, err = redisClient.Do("ZADD", t.key(), t.score(), b)
-	return err
-}
-
-func (t tick) score() float64 {
-	return float64(t.Datetime.Unix())
-}
-
-func (t tick) key() string {
-	return keyOfSensorTicks(t.SensorID)
-}
-
-func (t tick) String() string {
-	return fmt.Sprintf("datetime: %v, sensor ID: %d, next: %s, battery: %f, sensor1: %d, humidity: %d, radio: %d",
-		t.Datetime, t.SensorID, t.NextDataSession, t.BatteryVoltage, t.Temperature, t.Humidity, t.RadioQuality)
-}
-
-func (c controller) key() string {
-	return keyOfController(c.ID)
-}
-
-func (c controller) generateToken() string {
-	h := md5.New()
-	h.Write([]byte(fmt.Sprintf("OPEN%dSENSOR%dPLATFORM", c.ID, c.ID)))
-	return fmt.Sprintf("%x", h.Sum(nil))
-}
-
-func processTicks(tickList string, parser tickParser) (int, error) {
-	redisClient := redisPool.Get()
-	defer redisClient.Close()
-
-	tickList = strings.Replace(tickList, "\r", "\n", -1)
-	processedCount := 0
-	for _, s := range strings.Split(tickList, "\n") {
-		if len(s) == 0 {
-			continue
-		}
-		err := processTick(redisClient, s, parser)
-		if err != nil {
-			return 0, err
-		}
-		processedCount += 1
-	}
-
-	return processedCount, nil
-}
-
-func processTick(redisClient redis.Conn, s string, parseTick tickParser) error {
-	t, err := parseTick(s)
 	if err != nil {
 		return err
 	}
-	if err := t.Save(); err != nil {
-		return err
-	}
-	log.Println("Saved:", t)
 
 	if t.controllerID == "" {
 		id, err := redis.String(redisClient.Do("HGET", keySensorToController, t.SensorID))
@@ -527,7 +450,51 @@ func processTick(redisClient redis.Conn, s string, parseTick tickParser) error {
 		keyOfControllerSensors(t.controllerID), fmt.Sprintf("%d", t.SensorID)); err != nil {
 		return err
 	}
+
 	return nil
+}
+
+func (t tick) score() float64 {
+	return float64(t.Datetime.Unix())
+}
+
+func (t tick) key() string {
+	return keyOfSensorTicks(t.SensorID)
+}
+
+func (t tick) String() string {
+	return fmt.Sprintf("datetime: %v, sensor ID: %d, next: %s, battery: %f, sensor1: %d, humidity: %d, radio: %d",
+		t.Datetime, t.SensorID, t.NextDataSession, t.BatteryVoltage, t.Temperature, t.Humidity, t.RadioQuality)
+}
+
+func (c controller) key() string {
+	return keyOfController(c.ID)
+}
+
+func (c controller) generateToken() string {
+	h := md5.New()
+	h.Write([]byte(fmt.Sprintf("OPEN%dSENSOR%dPLATFORM", c.ID, c.ID)))
+	return fmt.Sprintf("%x", h.Sum(nil))
+}
+
+func handleUploadV1(input string) (*upload, error) {
+	tickList := strings.Replace(input, "\r", "\n", -1)
+	result := &upload{}
+	for _, s := range strings.Split(tickList, "\n") {
+		if len(s) == 0 {
+			continue
+		}
+		t, err := parseTickV1(s)
+		if err != nil {
+			return nil, err
+		}
+		if err := t.Save(); err != nil {
+			return nil, err
+		}
+		result.ticks = append(result.ticks, t)
+		log.Println("Saved:", t)
+	}
+	return result, nil
 }
 
 func decodeTemperature(n int32) float64 {
