@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/md5"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -62,9 +63,10 @@ type (
 		Token string
 	}
 	controllerReading struct {
-		ControllerID   string  `json:"controller_id"`
-		GSMCoverage    int64   `json:"gsm_coverage"`
-		BatteryVoltage float64 `json:"battery_voltage"`
+		ControllerID   string    `json:"controller_id"`
+		Datetime       time.Time `json:"datetime"`
+		GSMCoverage    int64     `json:"gsm_coverage"`
+		BatteryVoltage float64   `json:"battery_voltage"`
 	}
 	sensor struct {
 		ID           int64      `json:"id"`
@@ -118,10 +120,10 @@ func main() {
 
 type upload struct {
 	ticks []*tick
-	cr    controllerReading
+	cr    *controllerReading
 }
 
-type uploadHandler func(input string) (*upload, error)
+type uploadHandler func(buf *bytes.Buffer) (*upload, error)
 
 func serveTCP(port int, handler uploadHandler, loggingKey string) {
 	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
@@ -145,12 +147,12 @@ func handleConnection(conn net.Conn, port int, handler uploadHandler, loggingKey
 	defer conn.Close()
 	log.Println("New connection on port", port)
 
-	ch := make(chan string, 1)
+	ch := make(chan *bytes.Buffer, 1)
 	go func() {
 		buf := &bytes.Buffer{}
 		for {
-			data := make([]byte, 256)
-			n, err := conn.Read(data)
+			b := make([]byte, 256)
+			n, err := conn.Read(b)
 			if err != nil {
 				if err == io.EOF {
 					break
@@ -158,12 +160,12 @@ func handleConnection(conn net.Conn, port int, handler uploadHandler, loggingKey
 				log.Println("Error while reading from connection:", err)
 				return
 			}
-			buf.Write(data[:n])
-			if data[0] == 13 && data[1] == 10 {
+			buf.Write(b[:n])
+			if b[0] == 13 && b[1] == 10 {
 				break
 			}
 		}
-		ch <- buf.String()
+		ch <- buf
 	}()
 
 	timeout := make(chan bool, 1)
@@ -172,19 +174,19 @@ func handleConnection(conn net.Conn, port int, handler uploadHandler, loggingKey
 		timeout <- true
 	}()
 
-	var payload string
+	var buf *bytes.Buffer
 	select {
-	case payload = <-ch:
+	case buf = <-ch:
 		break
 	case <-timeout:
 		log.Println("Connection timeout!")
 		break
 	}
 
-	go logUpload(payload, loggingKey)
+	go logUpload(buf, loggingKey)
 
 	start := time.Now()
-	upload, err := handler(payload)
+	upload, err := handler(buf)
 	if err != nil {
 		log.Println("Error while processing ticks:", err)
 		return
@@ -192,10 +194,10 @@ func handleConnection(conn net.Conn, port int, handler uploadHandler, loggingKey
 	log.Println("Processed", upload, "in", time.Since(start))
 }
 
-func logUpload(payload string, loggingKey string) {
+func logUpload(buf *bytes.Buffer, loggingKey string) {
 	redisClient := redisPool.Get()
 	defer redisClient.Close()
-	if _, err := redisClient.Do("LPUSH", loggingKey, time.Now().String()+" "+payload); err != nil {
+	if _, err := redisClient.Do("LPUSH", loggingKey, time.Now().String()+" "+buf.String()); err != nil {
 		log.Println(err)
 		return
 	}
@@ -354,9 +356,119 @@ func parseTickV1(input string) (*tick, error) {
 	return t, nil
 }
 
-func handleUploadV2(input string) (*upload, error) {
-	log.Println("handleUploadV2 v2, input: ", input)
-	result := &upload{}
+func parseTickV2(input string) (*tick, error) {
+	t := &tick{
+		Datetime: time.Now(),
+	}
+
+	parts := strings.Split(input, ";")
+	if len(parts) != 5 {
+		return nil, fmt.Errorf("%d fields expected, got %d", 5, len(parts))
+	}
+
+	var err error
+	t.SensorID, err = strconv.ParseInt(parts[0], 10, 64)
+	if err != nil {
+		return nil, err
+	}
+
+	t.Temperature, err = strconv.ParseInt(parts[1], 10, 64)
+	if err != nil {
+		return nil, err
+	}
+
+	t.BatteryVoltage, err = strconv.ParseFloat(parts[2], 64)
+	if err != nil {
+		return nil, err
+	}
+
+	t.Humidity, err = strconv.ParseInt(parts[3], 10, 64)
+	if err != nil {
+		return nil, err
+	}
+
+	t.Sendcounter, err = strconv.ParseInt(parts[4], 10, 64)
+	if err != nil {
+		return nil, err
+	}
+
+	return t, nil
+}
+
+func parseMessages(buf *bytes.Buffer) ([]string, error) {
+	var messages []string
+	var message *bytes.Buffer
+	for _, c := range buf.Bytes() {
+		if '>' == c {
+			if nil == message {
+				continue
+			}
+			messages = append(messages, message.String())
+			message = nil
+			continue
+		}
+		if '<' == c {
+			message = bytes.NewBuffer(nil)
+			continue
+		}
+		if nil == message {
+			continue
+		}
+		if err := message.WriteByte(c); err != nil {
+			return nil, err
+		}
+	}
+	return messages, nil
+}
+
+func parseControllerReading(input string) (*controllerReading, error) {
+	return nil, nil
+	c := &controllerReading{}
+
+	parts := strings.Split(input, ";")
+	if len(parts) != 3 {
+		return nil, fmt.Errorf("%d fields expected, got %d", 5, len(parts))
+	}
+
+	var err error
+	c.ControllerID = parts[0]
+	if err != nil {
+		return nil, err
+	}
+
+	c.GSMCoverage, err = strconv.ParseInt(parts[1], 10, 64)
+	if err != nil {
+		return nil, err
+	}
+
+	c.BatteryVoltage, err = strconv.ParseFloat(parts[2], 64)
+	if err != nil {
+		return nil, err
+	}
+
+	return c, nil
+}
+
+func handleUploadV2(buf *bytes.Buffer) (*upload, error) {
+	messages, err := parseMessages(buf)
+	if err != nil {
+		return nil, err
+	}
+	if len(messages) < 2 {
+		return nil, errors.New("Invalid package: 1 sensor reading and 1 controller reading expected")
+	}
+	cr, err := parseControllerReading(messages[len(messages)-1])
+	if err != nil {
+		return nil, err
+	}
+	ticks, err := parseTicks(messages[0:len(messages)-1], parseTickV2)
+	if err != nil {
+		return nil, err
+	}
+	result := &upload{
+		cr:    cr,
+		ticks: ticks,
+	}
 	return result, nil
 }
 
@@ -477,24 +589,35 @@ func (c controller) generateToken() string {
 	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
-func handleUploadV1(input string) (*upload, error) {
-	tickList := strings.Replace(input, "\r", "\n", -1)
-	result := &upload{}
-	for _, s := range strings.Split(tickList, "\n") {
+type tickParser func(input string) (*tick, error)
+
+func parseTicks(input []string, parse tickParser) ([]*tick, error) {
+	var result []*tick
+	for _, s := range input {
 		if len(s) == 0 {
 			continue
 		}
-		t, err := parseTickV1(s)
+		t, err := parse(s)
 		if err != nil {
 			return nil, err
 		}
 		if err := t.Save(); err != nil {
 			return nil, err
 		}
-		result.ticks = append(result.ticks, t)
-		log.Println("Saved:", t)
+		result = append(result, t)
 	}
 	return result, nil
+}
+
+func handleUploadV1(buf *bytes.Buffer) (*upload, error) {
+	input := strings.Split(strings.Replace(buf.String(), "\r", "\n", -1), "\n")
+	ticks, err := parseTicks(input, parseTickV1)
+	if err != nil {
+		return nil, err
+	}
+	return &upload{
+		ticks: ticks,
+	}, nil
 }
 
 func decodeTemperature(n int32) float64 {

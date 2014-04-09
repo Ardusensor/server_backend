@@ -1,138 +1,146 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"io/ioutil"
 	"path/filepath"
 	"testing"
 	"time"
+
+	. "gopkg.in/check.v1"
 )
 
-const equals = true
+// Hook up gocheck into the "go test" runner.
+func Test(t *testing.T) { TestingT(t) }
 
-func assert(t *testing.T, a interface{}, mustEqual bool, b interface{}) {
-	if mustEqual {
-		if a != b {
-			t.Fatalf("%v did not equal %v", a, b)
-		}
-	} else {
-		if a == b {
-			t.Fatalf("%v did equal %v", a, b)
-		}
-	}
+type TestSuite struct{}
+
+var _ = Suite(&TestSuite{})
+
+func (s *TestSuite) SetUpSuite(c *C) {
+	redisPool = getRedisPool(*redisHost)
 }
 
-func TestParseTick(t *testing.T) {
-	redisPool = getRedisPool(*redisHost)
-	defer redisPool.Close()
-	entry, err := parseTickV1("<2012-12-26 12:46:5;75942;60;3158;5632;1584;144>")
-	assert(t, err, equals, nil)
-	assert(t, entry, !equals, nil)
-	assert(t, fmt.Sprintf("%d", entry.SensorID), equals, "75942")
-	assert(t, entry.NextDataSession, equals, "60")
-	assert(t, entry.BatteryVoltage, equals, 3158.0)
-	assert(t, entry.Temperature, equals, int64(5632))
-	assert(t, entry.Humidity, equals, int64(1584))
-	assert(t, entry.RadioQuality, equals, int64(144))
+func (s *TestSuite) TearDownSuite(c *C) {
+	redisPool.Close()
 }
 
-func TestParseDateTime(t *testing.T) {
-	redisPool = getRedisPool(*redisHost)
-	defer redisPool.Close()
+func (s *TestSuite) TestParseTick(c *C) {
 	entry, err := parseTickV1("<2012-12-26 12:46:5;75942;60;3158;5632;1584;144>")
-	assert(t, err, equals, nil)
-	assert(t, entry, !equals, nil)
-	assert(t, entry.Datetime.Year(), equals, 2012)
-	assert(t, entry.Datetime.Month(), equals, time.December)
-	assert(t, entry.Datetime.Day(), equals, 26)
-	assert(t, entry.Datetime.Hour(), equals, 12)
-	assert(t, entry.Datetime.Minute(), equals, 46)
-	assert(t, entry.Datetime.Second(), equals, 5)
+	c.Assert(err, Equals, nil)
+	c.Assert(entry, Not(Equals), nil)
+	c.Assert(fmt.Sprintf("%d", entry.SensorID), Equals, "75942")
+	c.Assert(entry.NextDataSession, Equals, "60")
+	c.Assert(entry.BatteryVoltage, Equals, 3158.0)
+	c.Assert(entry.Temperature, Equals, int64(5632))
+	c.Assert(entry.Humidity, Equals, int64(1584))
+	c.Assert(entry.RadioQuality, Equals, int64(144))
+}
+
+func (s *TestSuite) TestParseDateTime(c *C) {
+	entry, err := parseTickV1("<2012-12-26 12:46:5;75942;60;3158;5632;1584;144>")
+	c.Assert(err, Equals, nil)
+	c.Assert(entry, Not(Equals), nil)
+	c.Assert(entry.Datetime.Year(), Equals, 2012)
+	c.Assert(entry.Datetime.Month(), Equals, time.December)
+	c.Assert(entry.Datetime.Day(), Equals, 26)
+	c.Assert(entry.Datetime.Hour(), Equals, 12)
+	c.Assert(entry.Datetime.Minute(), Equals, 46)
+	c.Assert(entry.Datetime.Second(), Equals, 5)
 	name, _ := entry.Datetime.Zone()
-	assert(t, name, equals, "UTC")
+	c.Assert(name, Equals, "UTC")
 }
 
-func TestParseDateTimeMonthAndDayNotPadded(t *testing.T) {
-	redisPool = getRedisPool(*redisHost)
-	defer redisPool.Close()
+func (s *TestSuite) TestParseDateTimeMonthAndDayNotPadded(c *C) {
 	entry, err := parseTickV1("<2012-2-5 12:46:5;75942;60;3158;5632;1584;144>")
-	assert(t, err, equals, nil)
-	assert(t, entry, !equals, nil)
-	assert(t, entry.Datetime.Year(), equals, 2012)
-	assert(t, entry.Datetime.Month(), equals, time.February)
-	assert(t, entry.Datetime.Day(), equals, 5)
-	assert(t, entry.Datetime.Hour(), equals, 12)
-	assert(t, entry.Datetime.Minute(), equals, 46)
-	assert(t, entry.Datetime.Second(), equals, 5)
+	c.Assert(err, Equals, nil)
+	c.Assert(entry, Not(Equals), nil)
+	c.Assert(entry.Datetime.Year(), Equals, 2012)
+	c.Assert(entry.Datetime.Month(), Equals, time.February)
+	c.Assert(entry.Datetime.Day(), Equals, 5)
+	c.Assert(entry.Datetime.Hour(), Equals, 12)
+	c.Assert(entry.Datetime.Minute(), Equals, 46)
+	c.Assert(entry.Datetime.Second(), Equals, 5)
 	name, _ := entry.Datetime.Zone()
-	assert(t, name, equals, "UTC")
+	c.Assert(name, Equals, "UTC")
 }
 
-func TestParseDateTimeWithPaddedSeconds(t *testing.T) {
-	redisPool = getRedisPool(*redisHost)
-	defer redisPool.Close()
+func (s *TestSuite) TestParseDateTimeWithPaddedSeconds(c *C) {
 	entry, err := parseTickV1("<2012-12-26 12:46:05;75942;60;3158;5632;1584;144>")
-	assert(t, err, equals, nil)
-	assert(t, entry, !equals, nil)
-	assert(t, entry.Datetime.Second(), equals, 5)
+	c.Assert(err, Equals, nil)
+	c.Assert(entry, Not(Equals), nil)
+	c.Assert(entry.Datetime.Second(), Equals, 5)
 }
 
-func TestParseDateTimeSeconds(t *testing.T) {
-	redisPool = getRedisPool(*redisHost)
-	defer redisPool.Close()
+func (s *TestSuite) TestParseDateTimeSeconds(c *C) {
 	entry, err := parseTickV1("<2012-12-26 12:46:35;75942;60;3158;5632;1584;144>")
-	assert(t, err, equals, nil)
-	assert(t, entry, !equals, nil)
-	assert(t, entry.Datetime.Second(), equals, 35)
+	c.Assert(err, Equals, nil)
+	c.Assert(entry, Not(Equals), nil)
+	c.Assert(entry.Datetime.Second(), Equals, 35)
 }
 
-func TestParseDateTimeMinutes(t *testing.T) {
-	redisPool = getRedisPool(*redisHost)
-	defer redisPool.Close()
+func (s *TestSuite) TestParseDateTimeMinutes(c *C) {
 	entry, err := parseTickV1("<2012-12-26 13:2:36;75942;10;3202;6784;1580;150>")
-	assert(t, err, equals, nil)
-	assert(t, entry, !equals, nil)
-	assert(t, entry.Datetime.Minute(), equals, 2)
+	c.Assert(err, Equals, nil)
+	c.Assert(entry, Not(Equals), nil)
+	c.Assert(entry.Datetime.Minute(), Equals, 2)
 }
 
-func TestProcessTicks(t *testing.T) {
-	redisPool = getRedisPool(*redisHost)
-	defer redisPool.Close()
+func (s *TestSuite) TestProcessTicks(c *C) {
 	b, err := ioutil.ReadFile(filepath.Join("testdata", "testfile.txt"))
-	assert(t, err, equals, nil)
-	u, err := handleUploadV1(string(b))
-	assert(t, err, equals, nil)
-	assert(t, len(u.ticks), equals, 107)
+	c.Assert(err, Equals, nil)
+	u, err := handleUploadV1(bytes.NewBuffer(b))
+	c.Assert(err, Equals, nil)
+	c.Assert(len(u.ticks), Equals, 107)
 }
 
-func TestProcessExample(t *testing.T) {
-	redisPool = getRedisPool(*redisHost)
-	defer redisPool.Close()
+func (s *TestSuite) TestProcessExample(c *C) {
 	b, err := ioutil.ReadFile(filepath.Join("testdata", "example.txt"))
-	assert(t, err, equals, nil)
-	u, err := handleUploadV1(string(b))
-	assert(t, err, equals, nil)
-	assert(t, len(u.ticks), equals, 5)
+	c.Assert(err, Equals, nil)
+	u, err := handleUploadV1(bytes.NewBuffer(b))
+	c.Assert(err, Equals, nil)
+	c.Assert(len(u.ticks), Equals, 5)
 }
 
-func TestProcessSingleLineExample(t *testing.T) {
-	redisPool = getRedisPool(*redisHost)
-	defer redisPool.Close()
-	u, err := handleUploadV1("<2013-4-7 10:24:39;426842;60;3135;6656;2312;126>")
-	assert(t, err, equals, nil)
-	assert(t, len(u.ticks), equals, 1)
+func (s *TestSuite) TestProcessSingleLineExample(c *C) {
+	u, err := handleUploadV1(bytes.NewBufferString("<2013-4-7 10:24:39;426842;60;3135;6656;2312;126>"))
+	c.Assert(err, Equals, nil)
+	c.Assert(len(u.ticks), Equals, 1)
 }
 
-func TestProcessSingleLineStartingWithR(t *testing.T) {
-	redisPool = getRedisPool(*redisHost)
-	defer redisPool.Close()
-	u, err := handleUploadV1("\r<2013-4-7 10:24:39;426842;60;3135;6656;2312;126>")
-	assert(t, err, equals, nil)
-	assert(t, len(u.ticks), equals, 1)
+func (s *TestSuite) TestProcessSingleLineStartingWithR(c *C) {
+	u, err := handleUploadV1(bytes.NewBufferString("\r<2013-4-7 10:24:39;426842;60;3135;6656;2312;126>"))
+	c.Assert(err, Equals, nil)
+	c.Assert(len(u.ticks), Equals, 1)
 }
 
-func TestDecodeTemperature(t *testing.T) {
-	assert(t, decodeTemperature(5056), equals, 19.5)
-	assert(t, decodeTemperature(2528), equals, 9.5)
-	assert(t, decodeTemperature(2240), equals, 8.5)
+func (s *TestSuite) TestDecodeTemperature(c *C) {
+	c.Assert(decodeTemperature(5056), Equals, 19.5)
+	c.Assert(decodeTemperature(2528), Equals, 9.5)
+	c.Assert(decodeTemperature(2240), Equals, 8.5)
+}
+
+func (s *TestSuite) TestHandleV2(c *C) {
+	now := time.Now()
+	u, err := handleUploadV2(bytes.NewBufferString("<13;347;886;199;51>(132207)<13;22;196>"))
+	c.Assert(err, Equals, nil)
+	c.Assert(u, Not(Equals), nil)
+	c.Assert(len(u.ticks), Equals, 1)
+
+	tk := u.ticks[0]
+	c.Assert(tk.SensorID, Equals, int64(13))
+	c.Assert(tk.Temperature, Equals, int64(347))
+	c.Assert(tk.BatteryVoltage, Equals, float64(886))
+	c.Assert(tk.Humidity, Equals, int64(199))
+	c.Assert(tk.Sendcounter, Equals, int64(51))
+	c.Assert(tk.Datetime.Unix(), Equals, now.Unix())
+
+	c.Assert(u.cr, Not(Equals), nil)
+	/*
+		c.Assert(u.cr.ControllerID, Equals, "13")
+		c.Assert(u.cr.GSMCoverage, Equals, "22")
+		c.Assert(u.cr.BatteryVoltage, Equals, "196")
+		c.Assert(u.cr.Datetime.Unix(), Equals, now.Unix())
+	*/
 }
