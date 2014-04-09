@@ -8,6 +8,7 @@ services:
 
 before_script:
 - go get
+- go get gopkg.in/check.v1
 
 script:
  - go test -v
