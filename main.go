@@ -456,7 +456,7 @@ func handleUploadV2(buf *bytes.Buffer) (*upload, error) {
 		return nil, err
 	}
 	if len(messages) < 2 {
-		return nil, errors.New("Invalid package: 1 sensor reading and 1 controller reading expected")
+		return nil, errors.New("Invalid package: at least 1 sensor reading and 1 controller reading expected")
 	}
 	cr, err := parseControllerReading(messages[len(messages)-1])
 	if err != nil {
