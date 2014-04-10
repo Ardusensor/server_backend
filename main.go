@@ -233,6 +233,9 @@ func unmarshalTickJSON(b []byte) (*tick, error) {
 	if t.RadioQuality, err = parseInt(values["radio_quality"]); err != nil {
 		log.Println("Warning: Invalid or missing radio_quality in JSON", err.Error())
 	}
+	if t.Sendcounter, err = parseInt(values["send_counter"]); err != nil {
+		log.Println("Warning: Invalid or missing send_counter in JSON", err.Error())
+	}
 	return &t, nil
 }
 
