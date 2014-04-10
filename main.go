@@ -89,6 +89,7 @@ type (
 		BatteryVoltageVisual float64 `json:"battery_voltage_visual,omitempty"` // actual mV value, for visual
 		// Controller ID is not serialized
 		controllerID string
+		Version      int64 `json:"version"`
 	}
 )
 
@@ -271,7 +272,6 @@ func findAverages(ticks []*tick, dotsPerDay int, start int, end int) []*tick {
 	for startTime.Before(endTime) {
 		next := startTime.Add(increment)
 		dot := averageMatching(ticks, startTime, next)
-		dot.decodeForVisual()
 		result = append(result, &dot)
 		startTime = next
 	}
@@ -338,6 +338,7 @@ func parseTickV1(input string) (*tick, error) {
 		Datetime:        datetime,
 		SensorID:        sensorID,
 		NextDataSession: parts[2],
+		Version:         1,
 	}
 	t.BatteryVoltage, err = parseFloat(parts[3])
 	if err != nil {
@@ -361,6 +362,7 @@ func parseTickV1(input string) (*tick, error) {
 func parseTickV2(input string) (*tick, error) {
 	t := &tick{
 		Datetime: time.Now(),
+		Version:  2,
 	}
 
 	parts := strings.Split(input, ";")
@@ -498,7 +500,6 @@ func findTicksByRange(sensorID int64, startIndex, stopIndex int) ([]*tick, error
 		if err != nil {
 			return nil, err
 		}
-		t.decodeForVisual()
 		ticks = append(ticks, t)
 	}
 
@@ -520,16 +521,9 @@ func findTicksByScore(sensorID int64, start, end int) ([]*tick, error) {
 		if err != nil {
 			return nil, err
 		}
-		t.decodeForVisual()
 		ticks = append(ticks, t)
 	}
 	return ticks, nil
-}
-
-// FIXME: do this when saving
-func (t *tick) decodeForVisual() {
-	t.TemperatureVisual = decodeTemperature(int32(t.Temperature))
-	t.BatteryVoltageVisual = t.BatteryVoltage / 1000.0
 }
 
 func (t tick) Save() error {
