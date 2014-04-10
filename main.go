@@ -220,7 +220,9 @@ func unmarshalTickJSON(b []byte) (*tick, error) {
 	if t.SensorID, err = parseInt(values["sensor_id"]); err != nil {
 		return nil, fmt.Errorf("Invalid or missing sensor_id in JSON: %s", err.Error())
 	}
-	t.NextDataSession = values["next_data_session"].(string)
+	if _, exists := values["next_data_session"]; exists {
+		t.NextDataSession = values["next_data_session"].(string)
+	}
 	if t.BatteryVoltage, err = parseFloat(values["battery_voltage"]); err != nil {
 		log.Println("Warning: Invalid or missing battery_voltage in JSON", err.Error())
 	}
