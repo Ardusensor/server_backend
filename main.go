@@ -78,15 +78,12 @@ type (
 	tick struct {
 		SensorID        int64     `json:"sensor_id,omitempty"`
 		Datetime        time.Time `json:"datetime"`
-		NextDataSession string    `json:"next_data_session,omitempty"` // sec
-		BatteryVoltage  float64   `json:"battery_voltage,omitempty"`   // mV
-		Temperature     float64   `json:"sensor1,omitempty"`           // encoded temperature
-		Humidity        int64     `json:"sensor2,omitempty"`           // humidity
-		RadioQuality    int64     `json:"radio_quality,omitempty"`     // (LQI=0..255)
-		Sendcounter     int64     `json:"send_counter,omitempty"`      // (LQI=0..255)
-		// Visual/rendering
-		TemperatureVisual    float64 `json:"temperature,omitempty"`
-		BatteryVoltageVisual float64 `json:"battery_voltage_visual,omitempty"` // actual mV value, for visual
+		NextDataSession string    `json:"next_data_session,omitempty"`      // sec
+		BatteryVoltage  float64   `json:"battery_voltage_visual,omitempty"` // mV
+		Temperature     float64   `json:"temperature,omitempty"`            // encoded temperature
+		Humidity        int64     `json:"sensor2,omitempty"`                // humidity
+		RadioQuality    int64     `json:"radio_quality,omitempty"`          // (LQI=0..255)
+		Sendcounter     int64     `json:"send_counter,omitempty"`           // (LQI=0..255)
 		// Controller ID is not serialized
 		controllerID string
 		Version      int64 `json:"version"`
@@ -530,9 +527,6 @@ func findTicksByScore(sensorID int64, start, end int) ([]*tick, error) {
 func (t *tick) Save() error {
 	redisClient := redisPool.Get()
 	defer redisClient.Close()
-
-	t.TemperatureVisual = t.Temperature
-	t.BatteryVoltageVisual = t.BatteryVoltage
 
 	b, err := json.Marshal(t)
 	if err != nil {
