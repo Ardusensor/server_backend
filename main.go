@@ -386,6 +386,7 @@ func parseTickV2(input string) (*tick, error) {
 	if err != nil {
 		return nil, err
 	}
+	t.BatteryVoltage = t.BatteryVoltage * 0.00384
 
 	t.Humidity, err = parseInt(parts[3])
 	if err != nil {
@@ -529,6 +530,9 @@ func findTicksByScore(sensorID int64, start, end int) ([]*tick, error) {
 func (t tick) Save() error {
 	redisClient := redisPool.Get()
 	defer redisClient.Close()
+
+	t.TemperatureVisual = t.Temperature
+	t.BatteryVoltageVisual = t.BatteryVoltage
 
 	b, err := json.Marshal(t)
 	if err != nil {
