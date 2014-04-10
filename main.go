@@ -634,35 +634,3 @@ func handleUploadV1(buf *bytes.Buffer) (*upload, error) {
 		ticks: ticks,
 	}, nil
 }
-
-func decodeTemperature(n int32) float64 {
-	sum := 0.0
-	if n&(1<<7) != 0 {
-		sum += 0.5
-	}
-	if n&(1<<8) != 0 {
-		sum += 1
-	}
-	if n&(1<<9) != 0 {
-		sum += 2
-	}
-	if n&(1<<10) != 0 {
-		sum += 4
-	}
-	if n&(1<<11) != 0 {
-		sum += 8
-	}
-	if n&(1<<12) != 0 {
-		sum += 16
-	}
-	if n&(1<<13) != 0 {
-		sum += 32
-	}
-	if n&(1<<14) != 0 {
-		sum += 64
-	}
-	if n&(1<<15) != 0 {
-		return -sum
-	}
-	return sum
-}

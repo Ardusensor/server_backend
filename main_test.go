@@ -115,12 +115,6 @@ func (s *TestSuite) TestProcessSingleLineStartingWithR(c *C) {
 	c.Assert(len(u.ticks), Equals, 1)
 }
 
-func (s *TestSuite) TestDecodeTemperature(c *C) {
-	c.Assert(decodeTemperature(5056), Equals, 19.5)
-	c.Assert(decodeTemperature(2528), Equals, 9.5)
-	c.Assert(decodeTemperature(2240), Equals, 8.5)
-}
-
 func (s *TestSuite) TestHandleV2(c *C) {
 	now := time.Now()
 	u, err := handleUploadV2(bytes.NewBufferString("<13;347;886;199;51>(132207)<13;22;196>"))
