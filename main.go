@@ -80,7 +80,7 @@ type (
 		Datetime        time.Time `json:"datetime"`
 		NextDataSession string    `json:"next_data_session,omitempty"` // sec
 		BatteryVoltage  float64   `json:"battery_voltage,omitempty"`   // mV
-		Temperature     int64     `json:"sensor1,omitempty"`           // encoded temperature
+		Temperature     float64   `json:"sensor1,omitempty"`           // encoded temperature
 		Humidity        int64     `json:"sensor2,omitempty"`           // humidity
 		RadioQuality    int64     `json:"radio_quality,omitempty"`     // (LQI=0..255)
 		Sendcounter     int64     `json:"send_counter,omitempty"`      // (LQI=0..255)
@@ -226,7 +226,7 @@ func unmarshalTickJSON(b []byte) (*tick, error) {
 	if t.BatteryVoltage, err = parseFloat(values["battery_voltage"]); err != nil {
 		log.Println("Warning: Invalid or missing battery_voltage in JSON", err.Error())
 	}
-	if t.Temperature, err = parseInt(values["sensor1"]); err != nil {
+	if t.Temperature, err = parseFloat(values["sensor1"]); err != nil {
 		log.Println("Warning: Invalid or missing sensor1 in JSON", err.Error())
 	}
 	if t.Humidity, err = parseInt(values["sensor2"]); err != nil {
@@ -281,7 +281,7 @@ func findAverages(ticks []*tick, dotsPerDay int, start int, end int) []*tick {
 func averageMatching(ticks []*tick, start time.Time, end time.Time) tick {
 	var matching int64
 	var avgBatteryVoltage float64
-	var avgTemperature int64
+	var avgTemperature float64
 	var avgHumidity int64
 	var avgRadioQuality int64
 	for _, tick := range ticks {
@@ -297,7 +297,7 @@ func averageMatching(ticks []*tick, start time.Time, end time.Time) tick {
 	if matching > 0 {
 		avgBatteryVoltage /= float64(matching)
 		avgRadioQuality /= matching
-		avgTemperature /= matching
+		avgTemperature /= float64(matching)
 		avgHumidity /= matching
 	}
 	return tick{
@@ -330,7 +330,7 @@ func parseTickV1(input string) (*tick, error) {
 	if err != nil {
 		return nil, err
 	}
-	sensorID, err := strconv.ParseInt(parts[1], 10, 64)
+	sensorID, err := parseInt(parts[1])
 	if err != nil {
 		return nil, err
 	}
@@ -339,19 +339,19 @@ func parseTickV1(input string) (*tick, error) {
 		SensorID:        sensorID,
 		NextDataSession: parts[2],
 	}
-	t.BatteryVoltage, err = strconv.ParseFloat(parts[3], 64)
+	t.BatteryVoltage, err = parseFloat(parts[3])
 	if err != nil {
 		return nil, err
 	}
-	t.Temperature, err = strconv.ParseInt(parts[4], 10, 64)
+	t.Temperature, err = parseFloat(parts[4])
 	if err != nil {
 		return nil, err
 	}
-	t.Humidity, err = strconv.ParseInt(parts[5], 10, 64)
+	t.Humidity, err = parseInt(parts[5])
 	if err != nil {
 		return nil, err
 	}
-	t.RadioQuality, err = strconv.ParseInt(parts[6], 10, 64)
+	t.RadioQuality, err = parseInt(parts[6])
 	if err != nil {
 		return nil, err
 	}
@@ -369,27 +369,28 @@ func parseTickV2(input string) (*tick, error) {
 	}
 
 	var err error
-	t.SensorID, err = strconv.ParseInt(parts[0], 10, 64)
+	t.SensorID, err = parseInt(parts[0])
 	if err != nil {
 		return nil, err
 	}
 
-	t.Temperature, err = strconv.ParseInt(parts[1], 10, 64)
+	sensorReading, err := parseFloat(parts[1])
+	if err != nil {
+		return nil, err
+	}
+	t.Temperature = (sensorReading - 324.31) / 1.22
+
+	t.BatteryVoltage, err = parseFloat(parts[2])
 	if err != nil {
 		return nil, err
 	}
 
-	t.BatteryVoltage, err = strconv.ParseFloat(parts[2], 64)
+	t.Humidity, err = parseInt(parts[3])
 	if err != nil {
 		return nil, err
 	}
 
-	t.Humidity, err = strconv.ParseInt(parts[3], 10, 64)
-	if err != nil {
-		return nil, err
-	}
-
-	t.Sendcounter, err = strconv.ParseInt(parts[4], 10, 64)
+	t.Sendcounter, err = parseInt(parts[4])
 	if err != nil {
 		return nil, err
 	}
@@ -439,12 +440,12 @@ func parseControllerReading(input string) (*controllerReading, error) {
 		return nil, err
 	}
 
-	c.GSMCoverage, err = strconv.ParseInt(parts[1], 10, 64)
+	c.GSMCoverage, err = parseInt(parts[1])
 	if err != nil {
 		return nil, err
 	}
 
-	c.BatteryVoltage, err = strconv.ParseFloat(parts[2], 64)
+	c.BatteryVoltage, err = parseFloat(parts[2])
 	if err != nil {
 		return nil, err
 	}

@@ -33,7 +33,7 @@ func (s *TestSuite) TestParseTick(c *C) {
 	c.Assert(fmt.Sprintf("%d", entry.SensorID), Equals, "75942")
 	c.Assert(entry.NextDataSession, Equals, "60")
 	c.Assert(entry.BatteryVoltage, Equals, 3158.0)
-	c.Assert(entry.Temperature, Equals, int64(5632))
+	c.Assert(entry.Temperature, Equals, float64(5632))
 	c.Assert(entry.Humidity, Equals, int64(1584))
 	c.Assert(entry.RadioQuality, Equals, int64(144))
 }
@@ -130,7 +130,7 @@ func (s *TestSuite) TestHandleV2(c *C) {
 
 	tk := u.ticks[0]
 	c.Assert(tk.SensorID, Equals, int64(13))
-	c.Assert(tk.Temperature, Equals, int64(347))
+	c.Assert(tk.Temperature, Equals, float64(18.598360655737704))
 	c.Assert(tk.BatteryVoltage, Equals, float64(886))
 	c.Assert(tk.Humidity, Equals, int64(199))
 	c.Assert(tk.Sendcounter, Equals, int64(51))
@@ -152,7 +152,7 @@ func (s *TestSuite) TestHandleV2withSpaces(c *C) {
 	tk := u.ticks[0]
 	c.Assert(tk.controllerID, Equals, "13")
 	c.Assert(tk.SensorID, Equals, int64(10))
-	c.Assert(tk.Temperature, Equals, int64(344))
+	c.Assert(tk.Temperature, Equals, float64(16.13934426229508))
 	c.Assert(tk.BatteryVoltage, Equals, float64(875))
 	c.Assert(tk.Humidity, Equals, int64(195))
 	c.Assert(tk.Sendcounter, Equals, int64(49))
@@ -161,7 +161,7 @@ func (s *TestSuite) TestHandleV2withSpaces(c *C) {
 	tk = u.ticks[len(u.ticks)-1]
 	c.Assert(tk.controllerID, Equals, "13")
 	c.Assert(tk.SensorID, Equals, int64(15))
-	c.Assert(tk.Temperature, Equals, int64(345))
+	c.Assert(tk.Temperature, Equals, float64(16.95901639344262))
 	c.Assert(tk.BatteryVoltage, Equals, float64(1023))
 	c.Assert(tk.Humidity, Equals, int64(211))
 	c.Assert(tk.Sendcounter, Equals, int64(17))
@@ -183,7 +183,7 @@ func (s *TestSuite) TestHandleV2garbage(c *C) {
 	tk := u.ticks[0]
 	c.Assert(tk.controllerID, Equals, "13")
 	c.Assert(tk.SensorID, Equals, int64(11))
-	c.Assert(tk.Temperature, Equals, int64(335))
+	c.Assert(tk.Temperature, Equals, float64(8.762295081967212))
 	c.Assert(tk.BatteryVoltage, Equals, float64(838))
 	c.Assert(tk.Humidity, Equals, int64(343))
 	c.Assert(tk.Sendcounter, Equals, int64(200))
@@ -192,7 +192,7 @@ func (s *TestSuite) TestHandleV2garbage(c *C) {
 	tk = u.ticks[len(u.ticks)-1]
 	c.Assert(tk.controllerID, Equals, "13")
 	c.Assert(tk.SensorID, Equals, int64(10))
-	c.Assert(tk.Temperature, Equals, int64(344))
+	c.Assert(tk.Temperature, Equals, float64(16.13934426229508))
 	c.Assert(tk.BatteryVoltage, Equals, float64(873))
 	c.Assert(tk.Humidity, Equals, int64(211))
 	c.Assert(tk.Sendcounter, Equals, int64(179))
