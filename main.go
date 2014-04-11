@@ -24,6 +24,7 @@ import (
 var (
 	portV1        = flag.Int("port", 8090, "TCP upload port, V1 format")
 	portV2        = flag.Int("portv2", 18150, "TCP upload port, V2 format")
+	debugPort     = flag.Int("debug_port", 18151, "TCP upload port for free-form text debug info")
 	webserverPort = flag.Int("webserver_port", 8084, "HTTP port")
 	environment   = flag.String("environment", "development", "environment")
 	redisHost     = flag.String("redis", "127.0.0.1:6379", "host:ip of Redis instance")
@@ -33,9 +34,9 @@ var (
 var redisPool *redis.Pool
 
 const keyControllers = "osp:controllers"
+const keySensorToController = "osp:sensor_to_controller"
 const loggingKeyV1 = "osp:logs"
 const loggingKeyV2 = "osp:logs:v2"
-const keySensorToController = "osp:sensor_to_controller"
 
 const socketTimeoutSeconds = 30
 const defaultControllerID = "1"
@@ -109,39 +110,41 @@ func main() {
 
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
-	serveTCP(*portV1, handleUploadV1, loggingKeyV1)
-	serveTCP(*portV2, handleUploadV2, loggingKeyV2)
+	serveTCP("V1", *portV1, handleUploadV1)
+	serveTCP("V2", *portV2, handleUploadV2)
+	serveTCP("debug", *debugPort, handleDebugUpload)
 
 	log.Println("API started on port", *webserverPort)
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", *webserverPort), http.DefaultServeMux))
 }
 
 type upload struct {
-	ticks []*tick
-	cr    controllerReading
+	ticks    []*tick
+	cr       controllerReading
+	debugLog string
 }
 
 type uploadHandler func(buf *bytes.Buffer) (*upload, error)
 
-func serveTCP(port int, handler uploadHandler, loggingKey string) {
+func serveTCP(name string, port int, handler uploadHandler) {
 	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		log.Fatal(err)
 	}
 	go func() {
-		log.Println("Upload server started on port", port)
+		log.Println(name, "server started on port", port)
 		for {
 			conn, err := ln.Accept()
 			if err != nil {
 				log.Println("Error while accepting connection:", err)
 				continue
 			}
-			go handleConnection(conn, port, handler, loggingKey)
+			go handleConnection(conn, port, handler)
 		}
 	}()
 }
 
-func handleConnection(conn net.Conn, port int, handler uploadHandler, loggingKey string) {
+func handleConnection(conn net.Conn, port int, handler uploadHandler) {
 	defer conn.Close()
 	log.Println("New connection on port", port)
 
@@ -181,15 +184,14 @@ func handleConnection(conn net.Conn, port int, handler uploadHandler, loggingKey
 		break
 	}
 
-	go logUpload(buf, loggingKey)
-
 	start := time.Now()
-	upload, err := handler(buf)
+	_, err := handler(buf)
 	if err != nil {
-		log.Println("Error while processing ticks:", err)
+		log.Println("Error while processing upload:", err)
 		return
 	}
-	log.Println("Processed", upload, "in", time.Since(start))
+
+	log.Println("Upload processed in", time.Since(start))
 }
 
 func logUpload(buf *bytes.Buffer, loggingKey string) {
@@ -457,6 +459,8 @@ func parseControllerReading(input string) (*controllerReading, error) {
 }
 
 func handleUploadV2(buf *bytes.Buffer) (*upload, error) {
+	go logUpload(buf, loggingKeyV2)
+
 	messages, err := parseMessages(buf)
 	if err != nil {
 		return nil, err
@@ -622,6 +626,8 @@ func saveTicks(ticks []*tick) error {
 }
 
 func handleUploadV1(buf *bytes.Buffer) (*upload, error) {
+	go logUpload(buf, loggingKeyV1)
+
 	input := strings.Split(strings.Replace(buf.String(), "\r", "\n", -1), "\n")
 	ticks, err := parseTicks(input, parseTickV1)
 	if err != nil {
@@ -634,4 +640,24 @@ func handleUploadV1(buf *bytes.Buffer) (*upload, error) {
 	return &upload{
 		ticks: ticks,
 	}, nil
+}
+
+func handleDebugUpload(buf *bytes.Buffer) (*upload, error) {
+	input := buf.String()
+	if err := saveDebugLog(input); err != nil {
+		return nil, err
+	}
+	return &upload{
+		debugLog: input,
+	}, nil
+}
+
+const debugLogKey = "osp:debug_logs"
+
+func saveDebugLog(input string) error {
+	redisClient := redisPool.Get()
+	defer redisClient.Close()
+
+	_, err := redisClient.Do("ZADD", debugLogKey, float64(time.Now().Unix()), []byte(input))
+	return err
 }
