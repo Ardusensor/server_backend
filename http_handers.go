@@ -25,6 +25,9 @@ func defineRoutes() {
 	r.HandleFunc("/api/log", getLogsV1).Methods("GET")
 	r.HandleFunc("/api/logs", getLogsV1).Methods("GET")
 
+	r.HandleFunc("/api/debug_log", getDebugLogs).Methods("GET")
+	r.HandleFunc("/api/debug_logs", getDebugLogs).Methods("GET")
+
 	r.HandleFunc("/api/v1/log", getLogsV1).Methods("GET")
 	r.HandleFunc("/api/v1/logs", getLogsV1).Methods("GET")
 	r.HandleFunc("/api/v2/log", getLogsV2).Methods("GET")
@@ -350,6 +353,10 @@ func getLogs(w http.ResponseWriter, r *http.Request, key string) {
 		w.Write([]byte(s))
 		w.Write([]byte("\n\r"))
 	}
+}
+
+func getDebugLogs(w http.ResponseWriter, r *http.Request) {
+	getLogs(w, r, debugLogKey)
 }
 
 func getControllers(w http.ResponseWriter, r *http.Request) {

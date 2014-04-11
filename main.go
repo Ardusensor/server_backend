@@ -643,21 +643,10 @@ func handleUploadV1(buf *bytes.Buffer) (*upload, error) {
 }
 
 func handleDebugUpload(buf *bytes.Buffer) (*upload, error) {
-	input := buf.String()
-	if err := saveDebugLog(input); err != nil {
-		return nil, err
-	}
+	go logUpload(buf, debugLogKey)
 	return &upload{
-		debugLog: input,
+		debugLog: buf.String(),
 	}, nil
 }
 
 const debugLogKey = "osp:debug_logs"
-
-func saveDebugLog(input string) error {
-	redisClient := redisPool.Get()
-	defer redisClient.Close()
-
-	_, err := redisClient.Do("ZADD", debugLogKey, float64(time.Now().Unix()), []byte(input))
-	return err
-}
