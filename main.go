@@ -328,38 +328,6 @@ func getRedisPool(host string) *redis.Pool {
 	}
 }
 
-func parseTickV1(input string) (*tick, error) {
-	contents := input[1 : len(input)-1]
-	parts := strings.Split(contents, ";")
-	datetime, err := time.Parse("2006-1-2 15:4:5", parts[0])
-	if err != nil {
-		return nil, err
-	}
-	t := &tick{
-		Datetime:        datetime,
-		SensorID:        parts[1],
-		NextDataSession: parts[2],
-		Version:         1,
-	}
-	t.BatteryVoltage, err = parseFloat(parts[3])
-	if err != nil {
-		return nil, err
-	}
-	t.Temperature, err = parseFloat(parts[4])
-	if err != nil {
-		return nil, err
-	}
-	t.Humidity, err = parseInt(parts[5])
-	if err != nil {
-		return nil, err
-	}
-	t.RadioQuality, err = parseInt(parts[6])
-	if err != nil {
-		return nil, err
-	}
-	return t, nil
-}
-
 func parseTickV2(input string) (*tick, error) {
 	t := &tick{
 		Datetime: time.Now(),
@@ -626,11 +594,12 @@ func saveTicks(ticks []*tick) error {
 func handleUploadV1(buf *bytes.Buffer) (*upload, error) {
 	go logUpload(buf, loggingKeyV1)
 
-	input := strings.Split(strings.Replace(buf.String(), "\r", "\n", -1), "\n")
-	ticks, err := parseTicks(input, parseTickV1)
+	var pl payload
+	err := json.Unmarshal(buf.Bytes(), &pl)
 	if err != nil {
 		return nil, err
 	}
+	ticks := pl.convertToOldFormat()
 	err = saveTicks(ticks)
 	if err != nil {
 		return nil, err

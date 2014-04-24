@@ -29,17 +29,11 @@ type coordinator struct {
 	SensorReadings []sensorReading `json:"sensor_readings"`
 }
 
-func (pl payload) convertToOldFormat() (*controllerReading, []*tick) {
-	cr := &controllerReading{
-		Datetime:       time.Now(),
-		ControllerID:   fmt.Sprintf("%d", pl.Coordinator.CoordinatorID),
-		GSMCoverage:    pl.Coordinator.GSMCoverage,
-		BatteryVoltage: float64(pl.Coordinator.BatteryVoltage),
-	}
+func (pl payload) convertToOldFormat() []*tick {
 	var ticks []*tick
 	for _, sensorReading := range pl.Coordinator.SensorReadings {
 		t := &tick{
-			controllerID: cr.ControllerID,
+			controllerID: fmt.Sprintf("%d", pl.Coordinator.CoordinatorID),
 			Datetime:     time.Now(),
 			Version:      3,
 			SensorID:     sensorReading.SensorID,
@@ -50,5 +44,5 @@ func (pl payload) convertToOldFormat() (*controllerReading, []*tick) {
 		t.setBatteryVoltageFromSensorReading(float64(sensorReading.BatteryVoltage))
 		ticks = append(ticks, t)
 	}
-	return cr, ticks
+	return ticks
 }

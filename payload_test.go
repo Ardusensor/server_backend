@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"path/filepath"
 
@@ -47,12 +48,7 @@ func (s *TestSuite) TestPayloadConvertToOldFormat(c *C) {
 
 	c.Assert(pl.Coordinator, Not(IsNil))
 
-	cr, ticks := pl.convertToOldFormat()
-
-	c.Assert(cr, Not(IsNil))
-	c.Assert(cr.ControllerID, Equals, "20")
-	c.Assert(cr.GSMCoverage, Equals, int64(26))
-	c.Assert(cr.BatteryVoltage, Equals, float64(166))
+	ticks := pl.convertToOldFormat()
 
 	c.Assert(ticks, Not(IsNil))
 	c.Assert(len(ticks), Equals, 20)
@@ -63,5 +59,5 @@ func (s *TestSuite) TestPayloadConvertToOldFormat(c *C) {
 	c.Assert(t.Temperature, Equals, float64(243.18852459016395))
 	c.Assert(t.Humidity, Equals, int64(92))
 	c.Assert(t.Sendcounter, Equals, int64(18))
-	c.Assert(t.controllerID, Equals, cr.ControllerID)
+	c.Assert(t.controllerID, Equals, fmt.Sprintf("%d", pl.Coordinator.CoordinatorID))
 }
