@@ -17,3 +17,6 @@ lint: bin/golint
 
 bin/golint:
 	go get github.com/golang/lint/golint
+
+linux:
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o dist/osp_server

@@ -218,7 +218,12 @@ func unmarshalTickJSON(b []byte) (*tick, error) {
 		return nil, err
 	}
 	if _, exists := values["sensor_id"]; exists {
-		t.SensorID = values["sensor_id"].(string)
+		if _, isFloat64 := values["sensor_id"].(float64); isFloat64 {
+			t.SensorID = fmt.Sprintf("%d", int64(values["sensor_id"].(float64))) // :S
+		}
+		if _, isString := values["sensor_id"].(string); isString {
+			t.SensorID = values["sensor_id"].(string)
+		}
 	}
 	if len(t.SensorID) == 0 {
 		return nil, errors.New("Missing sensor_id in JSON")
