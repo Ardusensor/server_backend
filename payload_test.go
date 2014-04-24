@@ -36,3 +36,32 @@ func (s *TestSuite) TestParsePayload(c *C) {
 	c.Assert(sr.Moisture, Equals, int64(92))
 	c.Assert(sr.SendCounter, Equals, int64(18))
 }
+
+func (s *TestSuite) TestPayloadConvertToOldFormat(c *C) {
+	b, err := ioutil.ReadFile(filepath.Join("testdata", "example.json"))
+	c.Assert(err, IsNil)
+
+	var pl payload
+	err = json.Unmarshal(b, &pl)
+	c.Assert(err, IsNil)
+
+	c.Assert(pl.Coordinator, Not(IsNil))
+
+	cr, ticks := pl.convertToOldFormat()
+
+	c.Assert(cr, Not(IsNil))
+	c.Assert(cr.ControllerID, Equals, "20")
+	c.Assert(cr.GSMCoverage, Equals, int64(26))
+	c.Assert(cr.BatteryVoltage, Equals, float64(166))
+
+	c.Assert(ticks, Not(IsNil))
+	c.Assert(len(ticks), Equals, 20)
+
+	t := ticks[0]
+	c.Assert(t.SensorID, Equals, "13A20040B421AC")
+	c.Assert(t.BatteryVoltage, Equals, float64(3.06048))
+	c.Assert(t.Temperature, Equals, float64(243.18852459016395))
+	c.Assert(t.Humidity, Equals, int64(92))
+	c.Assert(t.Sendcounter, Equals, int64(18))
+	c.Assert(t.controllerID, Equals, cr.ControllerID)
+}

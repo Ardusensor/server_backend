@@ -41,8 +41,8 @@ const loggingKeyV2 = "osp:logs:v2"
 const socketTimeoutSeconds = 30
 const defaultControllerID = "1"
 
-func keyOfSensor(sensorID int64) string {
-	return fmt.Sprintf("osp:sensor:%d:fields", sensorID)
+func keyOfSensor(sensorID string) string {
+	return fmt.Sprintf("osp:sensor:%s:fields", sensorID)
 }
 
 func keyOfController(controllerID string) string {
@@ -53,8 +53,8 @@ func keyOfControllerSensors(controllerID string) string {
 	return "osp:controller:" + controllerID + ":sensors"
 }
 
-func keyOfSensorTicks(sensorID int64) string {
-	return fmt.Sprintf("osp:sensor:%d:ticks", sensorID)
+func keyOfSensorTicks(sensorID string) string {
+	return fmt.Sprintf("osp:sensor:%s:ticks", sensorID)
 }
 
 type (
@@ -70,14 +70,14 @@ type (
 		BatteryVoltage float64   `json:"battery_voltage"`
 	}
 	sensor struct {
-		ID           int64      `json:"id"`
+		ID           string     `json:"id"`
 		LastTick     *time.Time `json:"last_tick,omitempty"`
 		ControllerID string     `json:"controller_id"`
 		Lat          string     `json:"lat,omitempty"`
 		Lng          string     `json:"lng,omitempty"`
 	}
 	tick struct {
-		SensorID        int64     `json:"sensor_id,omitempty"`
+		SensorID        string    `json:"sensor_id,omitempty"`
 		Datetime        time.Time `json:"datetime"`
 		NextDataSession string    `json:"next_data_session,omitempty"`      // sec
 		BatteryVoltage  float64   `json:"battery_voltage_visual,omitempty"` // mV
@@ -217,8 +217,11 @@ func unmarshalTickJSON(b []byte) (*tick, error) {
 	if t.Datetime, err = time.Parse(time.RFC3339, values["datetime"].(string)); err != nil {
 		return nil, err
 	}
-	if t.SensorID, err = parseInt(values["sensor_id"]); err != nil {
-		return nil, fmt.Errorf("Invalid or missing sensor_id in JSON: %s", err.Error())
+	if _, exists := values["sensor_id"]; exists {
+		t.SensorID = values["sensor_id"].(string)
+	}
+	if len(t.SensorID) == 0 {
+		return nil, errors.New("Missing sensor_id in JSON")
 	}
 	if _, exists := values["next_data_session"]; exists {
 		t.NextDataSession = values["next_data_session"].(string)
@@ -332,13 +335,9 @@ func parseTickV1(input string) (*tick, error) {
 	if err != nil {
 		return nil, err
 	}
-	sensorID, err := parseInt(parts[1])
-	if err != nil {
-		return nil, err
-	}
 	t := &tick{
 		Datetime:        datetime,
-		SensorID:        sensorID,
+		SensorID:        parts[1],
 		NextDataSession: parts[2],
 		Version:         1,
 	}
@@ -372,23 +371,22 @@ func parseTickV2(input string) (*tick, error) {
 		return nil, fmt.Errorf("%d fields expected, got %d", 5, len(parts))
 	}
 
-	var err error
-	t.SensorID, err = parseInt(parts[0])
-	if err != nil {
-		return nil, err
+	t.SensorID = parts[0]
+	if len(t.SensorID) == 0 {
+		return nil, errors.New("Missing sensor ID")
 	}
 
 	sensorReading, err := parseFloat(parts[1])
 	if err != nil {
 		return nil, err
 	}
-	t.Temperature = (sensorReading - 324.31) / 1.22
+	t.setTemperatureFromSensorReading(sensorReading)
 
-	t.BatteryVoltage, err = parseFloat(parts[2])
+	sensorReading, err = parseFloat(parts[2])
 	if err != nil {
 		return nil, err
 	}
-	t.BatteryVoltage = t.BatteryVoltage * 0.00384
+	t.setBatteryVoltageFromSensorReading(sensorReading)
 
 	t.Humidity, err = parseInt(parts[3])
 	if err != nil {
@@ -490,7 +488,7 @@ func handleUploadV2(buf *bytes.Buffer) (*upload, error) {
 	return result, nil
 }
 
-func findTicksByRange(sensorID int64, startIndex, stopIndex int) ([]*tick, error) {
+func findTicksByRange(sensorID string, startIndex, stopIndex int) ([]*tick, error) {
 	redisClient := redisPool.Get()
 	defer redisClient.Close()
 
@@ -511,7 +509,7 @@ func findTicksByRange(sensorID int64, startIndex, stopIndex int) ([]*tick, error
 	return ticks, nil
 }
 
-func findTicksByScore(sensorID int64, start, end int) ([]*tick, error) {
+func findTicksByScore(sensorID string, start, end int) ([]*tick, error) {
 	redisClient := redisPool.Get()
 	defer redisClient.Close()
 
@@ -554,7 +552,7 @@ func (t *tick) Save() error {
 	}
 
 	if t.controllerID == "" {
-		log.Println("Achtung! Controller ID not found by sensor ID", t.SensorID, "saving tick to controller ", defaultControllerID)
+		log.Println("Controller ID not found by sensor ID", t.SensorID, "saving tick to controller ", defaultControllerID)
 		t.controllerID = defaultControllerID
 	}
 
@@ -650,3 +648,11 @@ func handleDebugUpload(buf *bytes.Buffer) (*upload, error) {
 }
 
 const debugLogKey = "osp:debug_logs"
+
+func (t *tick) setTemperatureFromSensorReading(sensorReading float64) {
+	t.Temperature = (sensorReading - 324.31) / 1.22
+}
+
+func (t *tick) setBatteryVoltageFromSensorReading(sensorReading float64) {
+	t.BatteryVoltage = sensorReading * 0.00384
+}

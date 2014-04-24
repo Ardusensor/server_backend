@@ -1,5 +1,10 @@
 package main
 
+import (
+	"fmt"
+	"time"
+)
+
 type payload struct {
 	Coordinator coordinator `json:"coordinator"`
 }
@@ -22,4 +27,28 @@ type coordinator struct {
 	Tries          int64           `json:"tries"`
 	Successes      int64           `json:"successes"`
 	SensorReadings []sensorReading `json:"sensor_readings"`
+}
+
+func (pl payload) convertToOldFormat() (*controllerReading, []*tick) {
+	cr := &controllerReading{
+		Datetime:       time.Now(),
+		ControllerID:   fmt.Sprintf("%d", pl.Coordinator.CoordinatorID),
+		GSMCoverage:    pl.Coordinator.GSMCoverage,
+		BatteryVoltage: float64(pl.Coordinator.BatteryVoltage),
+	}
+	var ticks []*tick
+	for _, sensorReading := range pl.Coordinator.SensorReadings {
+		t := &tick{
+			controllerID: cr.ControllerID,
+			Datetime:     time.Now(),
+			Version:      3,
+			SensorID:     sensorReading.SensorID,
+			Humidity:     sensorReading.Moisture,
+			Sendcounter:  sensorReading.SendCounter,
+		}
+		t.setTemperatureFromSensorReading(float64(sensorReading.SensorTemperature))
+		t.setBatteryVoltageFromSensorReading(float64(sensorReading.BatteryVoltage))
+		ticks = append(ticks, t)
+	}
+	return cr, ticks
 }

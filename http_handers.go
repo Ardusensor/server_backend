@@ -126,8 +126,8 @@ func putController(w http.ResponseWriter, r *http.Request) {
 func putSensor(w http.ResponseWriter, r *http.Request) {
 	log.Println(r)
 
-	sensorID, err := strconv.ParseInt(mux.Vars(r)["sensor_id"], 10, 64)
-	if err != nil {
+	sensorID, exists := mux.Vars(r)["sensor_id"]
+	if !exists {
 		http.Error(w, "Missing or invalid sensor_id", http.StatusBadRequest)
 		return
 	}
@@ -179,8 +179,7 @@ func getControllerSensors(w http.ResponseWriter, r *http.Request) {
 
 	sensors := make([]*sensor, 0)
 	for _, sensorID := range ids {
-		sensorID, err := strconv.ParseInt(sensorID, 10, 64)
-		if err != nil {
+		if len(sensorID) == 0 {
 			log.Println(err)
 			http.Error(w, "Invalid or missing sensor ID", http.StatusInternalServerError)
 			return
@@ -235,9 +234,9 @@ func getControllerSensors(w http.ResponseWriter, r *http.Request) {
 func getSensorDots(w http.ResponseWriter, r *http.Request) {
 	log.Println(r)
 
-	sensorID, err := strconv.ParseInt(mux.Vars(r)["sensor_id"], 10, 64)
-	if err != nil {
-		http.Error(w, "Invalid sensor_id", http.StatusBadRequest)
+	sensorID, exists := mux.Vars(r)["sensor_id"]
+	if !exists {
+		http.Error(w, "Missing sensor_id", http.StatusBadRequest)
 		return
 	}
 
@@ -293,9 +292,9 @@ func getSensorDots(w http.ResponseWriter, r *http.Request) {
 func getSensorTicks(w http.ResponseWriter, r *http.Request) {
 	log.Println(r)
 
-	sensorID, err := strconv.ParseInt(mux.Vars(r)["sensor_id"], 10, 64)
-	if err != nil {
-		http.Error(w, "Missing or invalid sensor_id", http.StatusBadRequest)
+	sensorID, exists := mux.Vars(r)["sensor_id"]
+	if !exists {
+		http.Error(w, "Missing sensor_id", http.StatusBadRequest)
 		return
 	}
 
