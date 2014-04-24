@@ -540,7 +540,7 @@ func (t *tick) Save() error {
 		return err
 	}
 	if _, err := redisClient.Do("SADD",
-		keyOfControllerSensors(t.controllerID), fmt.Sprintf("%d", t.SensorID)); err != nil {
+		keyOfControllerSensors(t.controllerID), t.SensorID); err != nil {
 		return err
 	}
 
