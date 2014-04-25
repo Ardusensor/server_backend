@@ -21,7 +21,6 @@ _testmain.go
 
 *.exe
 
-osp_server
 bin
 dist
 main
