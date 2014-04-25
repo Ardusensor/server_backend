@@ -1,0 +1,22 @@
+{
+  "crap_version": "1.1",
+  "environments": [
+    {
+      "name": "staging",
+      "default": true,
+      "servers": [
+        {
+          "port": "22",
+          "user": "ardusensor",
+          "ip": "172.16.0.1"
+        }
+      ],
+      "restart_command": "(sudo stop ardusensor_backend_staging || true) && sudo start ardusensor_backend_staging",
+      "deploydir": "/home/ardusensor/backend"
+    }
+  ],
+  "built_app_dir": "dist",
+  "app_build_commands": [
+    "make linux"
+  ]
+}

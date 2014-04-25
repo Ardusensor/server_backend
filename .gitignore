@@ -26,6 +26,3 @@ bin
 dist
 main
 
-# Configuration files per deployment
-config
-
