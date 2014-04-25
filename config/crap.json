@@ -11,7 +11,7 @@
           "ip": "172.16.0.1"
         }
       ],
-      "restart_command": "(stop ardusensor_backend_staging || true) && start ardusensor_backend_staging",
+      "restart_command": "(/sbin/stop ardusensor_backend_staging || true) && /sbin/start ardusensor_backend_staging",
       "deploydir": "/home/ardusensor/backend"
     }
   ],
