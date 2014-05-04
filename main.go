@@ -571,7 +571,7 @@ func (c controller) key() string {
 
 func (c controller) generateToken() string {
 	h := md5.New()
-	h.Write([]byte(fmt.Sprintf("OPEN%dSENSOR%dPLATFORM", c.ID, c.ID)))
+	h.Write([]byte(fmt.Sprintf("OPEN%sSENSOR%sPLATFORM", c.ID, c.ID)))
 	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
