@@ -1,6 +1,6 @@
 export GOPATH=$(shell pwd)
 
-backend: *.go lint
+backend: *.go lint errcheck
 	go fmt && go build -o bin/backend
 
 test:
@@ -21,3 +21,8 @@ bin/golint:
 linux:
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o dist/backend
 
+bin/errcheck:
+	go get github.com/kisielk/errcheck
+
+errcheck: bin/errcheck
+	bin/errcheck -ignore 'Close|[wW]rite.*|Flush|Seek|[rR]ead.*|Notify|Rollback'
