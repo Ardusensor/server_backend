@@ -561,8 +561,8 @@ func (t tick) key() string {
 }
 
 func (t tick) String() string {
-	return fmt.Sprintf("datetime: %v, sensor ID: %d, next: %s, battery: %f, sensor1: %d, humidity: %d, radio: %d",
-		t.Datetime, t.SensorID, t.NextDataSession, t.BatteryVoltage, t.Temperature, t.Humidity, t.RadioQuality)
+	return fmt.Sprintf("controllerID: %v, datetime: %v, sensor ID: %v, next: %v, battery: %v, sensor1: %v, humidity: %v, radio: %v",
+		t.controllerID, t.Datetime, t.SensorID, t.NextDataSession, t.BatteryVoltage, t.Temperature, t.Humidity, t.RadioQuality)
 }
 
 func (c controller) key() string {
