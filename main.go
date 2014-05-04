@@ -506,13 +506,15 @@ func findTicksByScore(sensorID string, start, end int) ([]*tick, error) {
 }
 
 func (t *tick) Save() error {
-	redisClient := redisPool.Get()
-	defer redisClient.Close()
+	log.Println("Saving tick", t)
 
 	b, err := json.Marshal(t)
 	if err != nil {
 		return err
 	}
+
+	redisClient := redisPool.Get()
+	defer redisClient.Close()
 
 	_, err = redisClient.Do("ZADD", t.key(), t.score(), b)
 	if err != nil {
