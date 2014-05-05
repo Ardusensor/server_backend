@@ -13,10 +13,11 @@ import (
 
 func defineRoutes() {
 	r := mux.NewRouter()
-	r.HandleFunc("/api/controllers/{controller_id}/sensors", getControllerSensors).Methods("GET")
-	r.HandleFunc("/api/controllers/{controller_id}", putController).Methods("POST", "PUT")
-	r.HandleFunc("/api/controllers/{controller_id}/{hash}", getController).Methods("GET")
-	// r.HandleFunc("/api/controllers", ).Methods("GET")
+
+	r.HandleFunc("/api/controllers/{controller_id}/sensors", getCoordinatorSensors).Methods("GET")
+	r.HandleFunc("/api/controllers/{controller_id}", putCoordinator).Methods("POST", "PUT")
+	r.HandleFunc("/api/controllers/{controller_id}/{hash}", getCoordinator).Methods("GET")
+
 	r.HandleFunc("/api/sensors/{sensor_id}", putSensor).Methods("POST", "PUT")
 	r.HandleFunc("/api/sensors/{sensor_id}/ticks", getSensorTicks).Methods("GET")
 	r.HandleFunc("/api/sensors/{sensor_id}/dots", getSensorDots).Methods("GET")
@@ -36,10 +37,10 @@ func defineRoutes() {
 	http.Handle("/", r)
 }
 
-func getController(w http.ResponseWriter, r *http.Request) {
+func getCoordinator(w http.ResponseWriter, r *http.Request) {
 	log.Println(r)
 
-	controllerID, ok := mux.Vars(r)["controller_id"]
+	coordinatorID, ok := mux.Vars(r)["controller_id"]
 	if !ok {
 		http.Error(w, "Missing controller_id", http.StatusBadRequest)
 		return
@@ -53,28 +54,28 @@ func getController(w http.ResponseWriter, r *http.Request) {
 	redisClient := redisPool.Get()
 	defer redisClient.Close()
 
-	c := &controller{ID: controllerID, Token: hashToken}
+	c := &coordinator{ID: coordinatorID, Token: hashToken}
 
-	controllerHash, err := redis.String(redisClient.Do("HGET", c.key(), "token"))
+	coordinatorHash, err := redis.String(redisClient.Do("HGET", c.key(), "token"))
 	if err != nil {
 		log.Println(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if controllerHash != c.Token {
-		http.Error(w, "Incorrect hash for this controller", http.StatusUnauthorized)
+	if coordinatorHash != c.Token {
+		http.Error(w, "Incorrect hash for this coordinator", http.StatusUnauthorized)
 	}
 
-	controllerName, err := redis.String(redisClient.Do("HGET", c.key(), "name"))
+	coordinatorName, err := redis.String(redisClient.Do("HGET", c.key(), "name"))
 	if err != nil {
 		if err != redis.ErrNil {
 			log.Println(err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		controllerName = c.ID
+		coordinatorName = c.ID
 	}
-	c.Name = controllerName
+	c.Name = coordinatorName
 
 	b, err := json.Marshal(c)
 	if err != nil {
@@ -87,10 +88,10 @@ func getController(w http.ResponseWriter, r *http.Request) {
 	w.Write(b)
 }
 
-func putController(w http.ResponseWriter, r *http.Request) {
+func putCoordinator(w http.ResponseWriter, r *http.Request) {
 	log.Println(r)
 
-	controllerID, ok := mux.Vars(r)["controller_id"]
+	coordinatorID, ok := mux.Vars(r)["controller_id"]
 	if !ok {
 		http.Error(w, "Missing controller_id", http.StatusBadRequest)
 		return
@@ -103,12 +104,12 @@ func putController(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var c controller
+	var c coordinator
 	if err := json.Unmarshal(b, &c); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	c.ID = controllerID
+	c.ID = coordinatorID
 
 	redisClient := redisPool.Get()
 	defer redisClient.Close()
@@ -158,10 +159,10 @@ func putSensor(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func getControllerSensors(w http.ResponseWriter, r *http.Request) {
+func getCoordinatorSensors(w http.ResponseWriter, r *http.Request) {
 	log.Println(r)
 
-	controllerID, ok := mux.Vars(r)["controller_id"]
+	coordinatorID, ok := mux.Vars(r)["controller_id"]
 	if !ok {
 		http.Error(w, "Missing controller_id", http.StatusBadRequest)
 		return
@@ -170,7 +171,7 @@ func getControllerSensors(w http.ResponseWriter, r *http.Request) {
 	redisClient := redisPool.Get()
 	defer redisClient.Close()
 
-	ids, err := redis.Strings(redisClient.Do("SMEMBERS", keyOfControllerSensors(controllerID)))
+	ids, err := redis.Strings(redisClient.Do("SMEMBERS", keyOfCoordinatorSensors(coordinatorID)))
 	if err != nil {
 		log.Println(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -184,7 +185,7 @@ func getControllerSensors(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Invalid or missing sensor ID", http.StatusInternalServerError)
 			return
 		}
-		s := &sensor{ID: sensorID, ControllerID: controllerID}
+		s := &sensor{ID: sensorID, ControllerID: coordinatorID}
 
 		// Get lat, lng of sensor
 		bb, err := redisClient.Do("HMGET", keyOfSensor(sensorID), "lat", "lng")
@@ -356,44 +357,4 @@ func getLogs(w http.ResponseWriter, r *http.Request, key string) {
 
 func getDebugLogs(w http.ResponseWriter, r *http.Request) {
 	getLogs(w, r, debugLogKey)
-}
-
-func getControllers(w http.ResponseWriter, r *http.Request) {
-	log.Println(r)
-
-	redisClient := redisPool.Get()
-	defer redisClient.Close()
-
-	ids, err := redis.Strings(redisClient.Do("SMEMBERS", keyControllers))
-	if err != nil {
-		log.Println(err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	controllers := make([]*controller, 0)
-	for _, controllerID := range ids {
-		c := &controller{ID: controllerID}
-		controllerName, err := redis.String(redisClient.Do("HGET", c.key(), "name"))
-		if err != nil {
-			if err != redis.ErrNil {
-				log.Println(err)
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			controllerName = c.ID
-		}
-		c.Name = controllerName
-		controllers = append(controllers, c)
-	}
-
-	b, err := json.Marshal(controllers)
-	if err != nil {
-		log.Println(err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	w.WriteHeader(http.StatusOK)
-	w.Write(b)
 }

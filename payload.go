@@ -26,19 +26,19 @@ type coordinatorReading struct {
 	FirstOverflow  int64           `json:"first_overflow"`
 	Tries          int64           `json:"tries"`
 	Successes      int64           `json:"successes"`
-	SensorReadings []sensorReading `json:"sensor_readings"`
+	SensorReadings []sensorReading `json:"sensor_readings,omitempty"`
 }
 
 func (pl payload) convertToOldFormat() []*tick {
 	var ticks []*tick
 	for _, sensorReading := range pl.Coordinator.SensorReadings {
 		t := &tick{
-			controllerID: fmt.Sprintf("%d", pl.Coordinator.CoordinatorID),
-			Datetime:     time.Now(),
-			Version:      3,
-			SensorID:     sensorReading.SensorID,
-			Humidity:     sensorReading.Moisture,
-			Sendcounter:  sensorReading.SendCounter,
+			coordinatorID: fmt.Sprintf("%d", pl.Coordinator.CoordinatorID),
+			Datetime:      time.Now(),
+			Version:       3,
+			SensorID:      sensorReading.SensorID,
+			Humidity:      sensorReading.Moisture,
+			Sendcounter:   sensorReading.SendCounter,
 		}
 		t.setTemperatureFromSensorReading(float64(sensorReading.SensorTemperature))
 		t.setBatteryVoltageFromSensorReading(float64(sensorReading.BatteryVoltage))

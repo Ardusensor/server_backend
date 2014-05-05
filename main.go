@@ -39,18 +39,18 @@ const loggingKeyV1 = "osp:logs"
 const loggingKeyV2 = "osp:logs:v2"
 
 const socketTimeoutSeconds = 30
-const defaultControllerID = "1"
+const defaultCoordinatorID = "1"
 
 func keyOfSensor(sensorID string) string {
 	return fmt.Sprintf("osp:sensor:%s:fields", sensorID)
 }
 
-func keyOfController(controllerID string) string {
-	return "osp:controller:" + controllerID + ":fields"
+func keyOfCoordinator(coordinatorID string) string {
+	return "osp:controller:" + coordinatorID + ":fields"
 }
 
-func keyOfControllerSensors(controllerID string) string {
-	return "osp:controller:" + controllerID + ":sensors"
+func keyOfCoordinatorSensors(coordinatorID string) string {
+	return "osp:controller:" + coordinatorID + ":sensors"
 }
 
 func keyOfSensorTicks(sensorID string) string {
@@ -58,7 +58,7 @@ func keyOfSensorTicks(sensorID string) string {
 }
 
 type (
-	controller struct {
+	coordinator struct {
 		ID    string `json:"id"`
 		Name  string `json:"name"`
 		Token string
@@ -85,9 +85,9 @@ type (
 		Humidity        int64     `json:"sensor2,omitempty"`                // humidity
 		RadioQuality    int64     `json:"radio_quality,omitempty"`          // (LQI=0..255)
 		Sendcounter     int64     `json:"send_counter,omitempty"`           // (LQI=0..255)
-		// Controller ID is not serialized
-		controllerID string
-		Version      int64 `json:"version"`
+		Version         int64     `json:"version"`
+		// is not serialized
+		coordinatorID string
 	}
 )
 
@@ -451,7 +451,7 @@ func handleUploadV2(buf *bytes.Buffer) (*upload, error) {
 		return nil, err
 	}
 	for _, t := range ticks {
-		t.controllerID = cr.ControllerID
+		t.coordinatorID = cr.ControllerID
 	}
 	err = saveTicks(ticks)
 	if err != nil {
@@ -521,31 +521,31 @@ func (t *tick) Save() error {
 		return err
 	}
 
-	if t.controllerID == "" {
+	if t.coordinatorID == "" {
 		id, err := redis.String(redisClient.Do("HGET", keySensorToController, t.SensorID))
 		if err != nil && err != redis.ErrNil {
 			return err
 		}
-		t.controllerID = id
+		t.coordinatorID = id
 	}
 
-	if t.controllerID == "" {
-		log.Println("Controller ID not found by sensor ID", t.SensorID, "saving tick to controller ", defaultControllerID)
-		t.controllerID = defaultControllerID
+	if t.coordinatorID == "" {
+		log.Println("Coordinator ID not found by sensor ID", t.SensorID, "saving tick to coordinator", defaultCoordinatorID)
+		t.coordinatorID = defaultCoordinatorID
 	}
 
-	c := &controller{ID: t.controllerID}
+	c := &coordinator{ID: t.coordinatorID}
 	if _, err := redisClient.Do("SADD", keyControllers, c.ID); err != nil {
 		return err
 	}
-	if _, err := redisClient.Do("HSET", c.key(), "token", c.generateToken()); err != nil {
+	if _, err := redisClient.Do("HSET", c.key(), "token", c.token()); err != nil {
 		return err
 	}
 	if _, err := redisClient.Do("HSET", keySensorToController, t.SensorID, c.ID); err != nil {
 		return err
 	}
 	if _, err := redisClient.Do("SADD",
-		keyOfControllerSensors(t.controllerID), t.SensorID); err != nil {
+		keyOfCoordinatorSensors(t.coordinatorID), t.SensorID); err != nil {
 		return err
 	}
 
@@ -561,15 +561,15 @@ func (t tick) key() string {
 }
 
 func (t tick) String() string {
-	return fmt.Sprintf("controllerID: %v, datetime: %v, sensor ID: %v, next: %v, battery: %v, sensor1: %v, humidity: %v, radio: %v",
-		t.controllerID, t.Datetime, t.SensorID, t.NextDataSession, t.BatteryVoltage, t.Temperature, t.Humidity, t.RadioQuality)
+	return fmt.Sprintf("coordinatorID: %v, datetime: %v, sensor ID: %v, next: %v, battery: %v, sensor1: %v, humidity: %v, radio: %v",
+		t.coordinatorID, t.Datetime, t.SensorID, t.NextDataSession, t.BatteryVoltage, t.Temperature, t.Humidity, t.RadioQuality)
 }
 
-func (c controller) key() string {
-	return keyOfController(c.ID)
+func (c coordinator) key() string {
+	return keyOfCoordinator(c.ID)
 }
 
-func (c controller) generateToken() string {
+func (c coordinator) token() string {
 	h := md5.New()
 	h.Write([]byte(fmt.Sprintf("OPEN%sSENSOR%sPLATFORM", c.ID, c.ID)))
 	return fmt.Sprintf("%x", h.Sum(nil))

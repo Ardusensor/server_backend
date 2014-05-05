@@ -62,7 +62,7 @@ func (s *TestSuite) TestHandleV2withSpaces(c *C) {
 	c.Assert(len(u.ticks), Equals, 10)
 
 	tk := u.ticks[0]
-	c.Assert(tk.controllerID, Equals, "13")
+	c.Assert(tk.coordinatorID, Equals, "13")
 	c.Assert(tk.SensorID, Equals, "10")
 	c.Assert(tk.Temperature, Equals, float64(16.13934426229508))
 	c.Assert(tk.BatteryVoltage, Equals, float64(3.36))
@@ -71,7 +71,7 @@ func (s *TestSuite) TestHandleV2withSpaces(c *C) {
 	c.Assert(tk.Datetime.Unix(), Equals, now.Unix())
 
 	tk = u.ticks[len(u.ticks)-1]
-	c.Assert(tk.controllerID, Equals, "13")
+	c.Assert(tk.coordinatorID, Equals, "13")
 	c.Assert(tk.SensorID, Equals, "15")
 	c.Assert(tk.Temperature, Equals, float64(16.95901639344262))
 	c.Assert(tk.BatteryVoltage, Equals, float64(3.9283200000000003))
@@ -93,7 +93,7 @@ func (s *TestSuite) TestHandleV2garbage(c *C) {
 	c.Assert(len(u.ticks), Equals, 4)
 
 	tk := u.ticks[0]
-	c.Assert(tk.controllerID, Equals, "13")
+	c.Assert(tk.coordinatorID, Equals, "13")
 	c.Assert(tk.SensorID, Equals, "11")
 	c.Assert(tk.Temperature, Equals, float64(8.762295081967212))
 	c.Assert(tk.BatteryVoltage, Equals, float64(3.21792))
@@ -102,7 +102,7 @@ func (s *TestSuite) TestHandleV2garbage(c *C) {
 	c.Assert(tk.Datetime.Unix(), Equals, now.Unix())
 
 	tk = u.ticks[len(u.ticks)-1]
-	c.Assert(tk.controllerID, Equals, "13")
+	c.Assert(tk.coordinatorID, Equals, "13")
 	c.Assert(tk.SensorID, Equals, "10")
 	c.Assert(tk.Temperature, Equals, float64(16.13934426229508))
 	c.Assert(tk.BatteryVoltage, Equals, float64(3.35232))
