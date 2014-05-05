@@ -51,31 +51,26 @@ func getCoordinator(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	redisClient := redisPool.Get()
-	defer redisClient.Close()
-
 	c := &coordinator{ID: coordinatorID, Token: hashToken}
 
-	coordinatorHash, err := redis.String(redisClient.Do("HGET", c.key(), "token"))
+	token, err := coordinatorToken(c.ID)
 	if err != nil {
 		log.Println(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if coordinatorHash != c.Token {
-		http.Error(w, "Incorrect hash for this coordinator", http.StatusUnauthorized)
+
+	if token != c.Token {
+		http.Error(w, "Incorrect token for this coordinator", http.StatusUnauthorized)
 	}
 
-	coordinatorName, err := redis.String(redisClient.Do("HGET", c.key(), "name"))
+	name, err := coordinatorName(c.ID)
 	if err != nil {
-		if err != redis.ErrNil {
-			log.Println(err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		coordinatorName = c.ID
+		log.Println(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
-	c.Name = coordinatorName
+	c.Name = name
 
 	b, err := json.Marshal(c)
 	if err != nil {
@@ -109,13 +104,8 @@ func putCoordinator(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	c.ID = coordinatorID
 
-	redisClient := redisPool.Get()
-	defer redisClient.Close()
-
-	_, err = redisClient.Do("HSET", c.key(), "name", c.Name)
-	if err != nil {
+	if err := saveCoordinatorName(coordinatorID, c.Name); err != nil {
 		log.Println(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -146,11 +136,7 @@ func putSensor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	redisClient := redisPool.Get()
-	defer redisClient.Close()
-
-	_, err = redisClient.Do("HMSET", keyOfSensor(sensorID), "lat", s.Lat, "lng", s.Lng)
-	if err != nil {
+	if err := saveSensorCoordinates(sensorID, s.Lat, s.Lng); err != nil {
 		log.Println(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

@@ -17,8 +17,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/garyburd/redigo/redis"
 )
 
 var (
@@ -31,31 +29,8 @@ var (
 	workdir       = flag.String("workdir", ".", "workdir of API, where log folder resides etc")
 )
 
-var redisPool *redis.Pool
-
-const keyControllers = "osp:controllers"
-const keySensorToController = "osp:sensor_to_controller"
-const loggingKeyV1 = "osp:logs"
-const loggingKeyV2 = "osp:logs:v2"
-
 const socketTimeoutSeconds = 30
 const defaultCoordinatorID = "1"
-
-func keyOfSensor(sensorID string) string {
-	return fmt.Sprintf("osp:sensor:%s:fields", sensorID)
-}
-
-func keyOfCoordinator(coordinatorID string) string {
-	return "osp:controller:" + coordinatorID + ":fields"
-}
-
-func keyOfCoordinatorSensors(coordinatorID string) string {
-	return "osp:controller:" + coordinatorID + ":sensors"
-}
-
-func keyOfSensorTicks(sensorID string) string {
-	return fmt.Sprintf("osp:sensor:%s:ticks", sensorID)
-}
 
 type (
 	coordinator struct {
@@ -197,19 +172,6 @@ func handleConnection(conn net.Conn, port int, handler uploadHandler) {
 	log.Println("Upload processed in", time.Since(start))
 }
 
-func logUpload(buf *bytes.Buffer, loggingKey string) {
-	redisClient := redisPool.Get()
-	defer redisClient.Close()
-	if _, err := redisClient.Do("LPUSH", loggingKey, time.Now().String()+" "+buf.String()); err != nil {
-		log.Println(err)
-		return
-	}
-	if _, err := redisClient.Do("LTRIM", loggingKey, 0, 1000); err != nil {
-		log.Println(err)
-		return
-	}
-}
-
 func unmarshalTickJSON(b []byte) (*tick, error) {
 	var values map[string]interface{}
 	if err := json.Unmarshal(b, &values); err != nil {
@@ -322,20 +284,6 @@ func averageMatching(ticks []*tick, start time.Time, end time.Time) tick {
 	}
 }
 
-func getRedisPool(host string) *redis.Pool {
-	return &redis.Pool{
-		MaxIdle:     3,
-		IdleTimeout: 240 * time.Second,
-		Dial: func() (redis.Conn, error) {
-			return redis.Dial("tcp", host)
-		},
-		TestOnBorrow: func(c redis.Conn, t time.Time) error {
-			_, err := c.Do("PING")
-			return err
-		},
-	}
-}
-
 func parseTickV2(input string) (*tick, error) {
 	t := &tick{
 		Datetime: time.Now(),
@@ -433,7 +381,11 @@ func parseControllerReading(input string) (*controllerReading, error) {
 }
 
 func handleUploadV2(buf *bytes.Buffer) (*upload, error) {
-	go logUpload(buf, loggingKeyV2)
+	go func(b *bytes.Buffer) {
+		if err := saveLog(b, loggingKeyV2); err != nil {
+			log.Println(err)
+		}
+	}(buf)
 
 	messages, err := parseMessages(buf)
 	if err != nil {
@@ -464,47 +416,6 @@ func handleUploadV2(buf *bytes.Buffer) (*upload, error) {
 	return result, nil
 }
 
-func findTicksByRange(sensorID string, startIndex, stopIndex int) ([]*tick, error) {
-	redisClient := redisPool.Get()
-	defer redisClient.Close()
-
-	bb, err := redisClient.Do("ZREVRANGE", keyOfSensorTicks(sensorID), startIndex, stopIndex)
-	if err != nil {
-		return nil, err
-	}
-
-	var ticks []*tick
-	for _, value := range bb.([]interface{}) {
-		t, err := unmarshalTickJSON(value.([]byte))
-		if err != nil {
-			return nil, err
-		}
-		ticks = append(ticks, t)
-	}
-
-	return ticks, nil
-}
-
-func findTicksByScore(sensorID string, start, end int) ([]*tick, error) {
-	redisClient := redisPool.Get()
-	defer redisClient.Close()
-
-	bb, err := redisClient.Do("ZRANGEBYSCORE", keyOfSensorTicks(sensorID), start, end)
-	if err != nil {
-		return nil, err
-	}
-
-	var ticks []*tick
-	for _, value := range bb.([]interface{}) {
-		t, err := unmarshalTickJSON(value.([]byte))
-		if err != nil {
-			return nil, err
-		}
-		ticks = append(ticks, t)
-	}
-	return ticks, nil
-}
-
 func (t *tick) Save() error {
 	log.Println("Saving tick", t)
 
@@ -513,17 +424,13 @@ func (t *tick) Save() error {
 		return err
 	}
 
-	redisClient := redisPool.Get()
-	defer redisClient.Close()
-
-	_, err = redisClient.Do("ZADD", t.key(), t.score(), b)
-	if err != nil {
+	if err := saveTick(keyOfSensorTicks(t.SensorID), float64(t.Datetime.Unix()), b); err != nil {
 		return err
 	}
 
 	if t.coordinatorID == "" {
-		id, err := redis.String(redisClient.Do("HGET", keySensorToController, t.SensorID))
-		if err != nil && err != redis.ErrNil {
+		id, err := findCoordinatorIDBySensorID(t.SensorID)
+		if err != nil {
 			return err
 		}
 		t.coordinatorID = id
@@ -534,30 +441,15 @@ func (t *tick) Save() error {
 		t.coordinatorID = defaultCoordinatorID
 	}
 
-	c := &coordinator{ID: t.coordinatorID}
-	if _, err := redisClient.Do("SADD", keyControllers, c.ID); err != nil {
+	if err := saveCoordinatorToken(t.coordinatorID); err != nil {
 		return err
 	}
-	if _, err := redisClient.Do("HSET", c.key(), "token", c.token()); err != nil {
-		return err
-	}
-	if _, err := redisClient.Do("HSET", keySensorToController, t.SensorID, c.ID); err != nil {
-		return err
-	}
-	if _, err := redisClient.Do("SADD",
-		keyOfCoordinatorSensors(t.coordinatorID), t.SensorID); err != nil {
+
+	if err := addSensorToCoordinator(t.SensorID, t.coordinatorID); err != nil {
 		return err
 	}
 
 	return nil
-}
-
-func (t tick) score() float64 {
-	return float64(t.Datetime.Unix())
-}
-
-func (t tick) key() string {
-	return keyOfSensorTicks(t.SensorID)
 }
 
 func (t tick) String() string {
@@ -565,13 +457,9 @@ func (t tick) String() string {
 		t.coordinatorID, t.Datetime, t.SensorID, t.NextDataSession, t.BatteryVoltage, t.Temperature, t.Humidity, t.RadioQuality)
 }
 
-func (c coordinator) key() string {
-	return keyOfCoordinator(c.ID)
-}
-
-func (c coordinator) token() string {
+func tokenForCoordinator(coordinatorID string) string {
 	h := md5.New()
-	h.Write([]byte(fmt.Sprintf("OPEN%sSENSOR%sPLATFORM", c.ID, c.ID)))
+	h.Write([]byte(fmt.Sprintf("OPEN%sSENSOR%sPLATFORM", coordinatorID, coordinatorID)))
 	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
@@ -602,7 +490,11 @@ func saveTicks(ticks []*tick) error {
 }
 
 func handleUploadV1(buf *bytes.Buffer) (*upload, error) {
-	go logUpload(buf, loggingKeyV1)
+	go func(b *bytes.Buffer) {
+		if err := saveLog(buf, loggingKeyV1); err != nil {
+			log.Println(err)
+		}
+	}(buf)
 
 	var pl payload
 	err := json.Unmarshal(buf.Bytes(), &pl)
@@ -620,13 +512,15 @@ func handleUploadV1(buf *bytes.Buffer) (*upload, error) {
 }
 
 func handleDebugUpload(buf *bytes.Buffer) (*upload, error) {
-	go logUpload(buf, debugLogKey)
+	go func(b *bytes.Buffer) {
+		if err := saveLog(buf, debugLogKey); err != nil {
+			log.Println(err)
+		}
+	}(buf)
 	return &upload{
 		debugLog: buf.String(),
 	}, nil
 }
-
-const debugLogKey = "osp:debug_logs"
 
 func (t *tick) setTemperatureFromSensorReading(sensorReading float64) {
 	t.Temperature = (sensorReading - 324.31) / 1.22
