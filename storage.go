@@ -2,7 +2,9 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/garyburd/redigo/redis"
@@ -189,4 +191,72 @@ func saveSensorCoordinates(sensorID, latitude, longitude string) error {
 		return err
 	}
 	return err
+}
+
+func sensorsOfCoordinator(coordinatorID string) ([]*sensor, error) {
+	redisClient := redisPool.Get()
+	defer redisClient.Close()
+
+	ids, err := redis.Strings(redisClient.Do("SMEMBERS", keyOfCoordinatorSensors(coordinatorID)))
+	if err != nil {
+		return nil, err
+	}
+
+	sensors := make([]*sensor, 0)
+	for _, sensorID := range ids {
+		if len(sensorID) == 0 {
+			return nil, errors.New("Invalid or missing sensor ID")
+		}
+		s := &sensor{ID: sensorID, ControllerID: coordinatorID}
+
+		// Get lat, lng of sensor
+		bb, err := redisClient.Do("HMGET", keyOfSensor(sensorID), "lat", "lng")
+		if err != nil {
+			return nil, err
+		}
+		if bb != nil {
+			list := bb.([]interface{})
+			if len(list) > 0 {
+				if list[0] != nil {
+					s.Lat = string(list[0].([]byte))
+				}
+				if list[1] != nil {
+					s.Lng = string(list[1].([]byte))
+				}
+			}
+		}
+
+		// Get last tick of sensor
+		ticks, err := findTicksByRange(sensorID, 0, 0)
+		if err != nil {
+			return nil, err
+		}
+		if len(ticks) > 0 {
+			s.LastTick = &ticks[0].Datetime
+
+		}
+
+		sensors = append(sensors, s)
+	}
+	return sensors, nil
+}
+
+func getLogs(key string) ([]byte, error) {
+	redisClient := redisPool.Get()
+	defer redisClient.Close()
+
+	bb, err := redisClient.Do("LRANGE", key, 0, 1000)
+	if err != nil {
+		return nil, err
+	}
+
+	buf := bytes.NewBuffer(nil)
+	for _, item := range bb.([]interface{}) {
+		s := string(item.([]byte))
+		s = strconv.Quote(s)
+		buf.WriteString(s)
+		buf.WriteString("\n\r")
+	}
+
+	return buf.Bytes(), nil
 }

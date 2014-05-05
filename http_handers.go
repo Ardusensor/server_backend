@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/garyburd/redigo/redis"
 	"github.com/gorilla/mux"
 )
 
@@ -21,10 +20,6 @@ func defineRoutes() {
 	r.HandleFunc("/api/sensors/{sensor_id}", putSensor).Methods("POST", "PUT")
 	r.HandleFunc("/api/sensors/{sensor_id}/ticks", getSensorTicks).Methods("GET")
 	r.HandleFunc("/api/sensors/{sensor_id}/dots", getSensorDots).Methods("GET")
-
-	// FIXME: deprecated
-	r.HandleFunc("/api/log", getLogsV1).Methods("GET")
-	r.HandleFunc("/api/logs", getLogsV1).Methods("GET")
 
 	r.HandleFunc("/api/debug_log", getDebugLogs).Methods("GET")
 	r.HandleFunc("/api/debug_logs", getDebugLogs).Methods("GET")
@@ -154,57 +149,11 @@ func getCoordinatorSensors(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	redisClient := redisPool.Get()
-	defer redisClient.Close()
-
-	ids, err := redis.Strings(redisClient.Do("SMEMBERS", keyOfCoordinatorSensors(coordinatorID)))
+	sensors, err := sensorsOfCoordinator(coordinatorID)
 	if err != nil {
 		log.Println(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
-	}
-
-	sensors := make([]*sensor, 0)
-	for _, sensorID := range ids {
-		if len(sensorID) == 0 {
-			log.Println(err)
-			http.Error(w, "Invalid or missing sensor ID", http.StatusInternalServerError)
-			return
-		}
-		s := &sensor{ID: sensorID, ControllerID: coordinatorID}
-
-		// Get lat, lng of sensor
-		bb, err := redisClient.Do("HMGET", keyOfSensor(sensorID), "lat", "lng")
-		if err != nil {
-			log.Println(err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		if bb != nil {
-			list := bb.([]interface{})
-			if len(list) > 0 {
-				if list[0] != nil {
-					s.Lat = string(list[0].([]byte))
-				}
-				if list[1] != nil {
-					s.Lng = string(list[1].([]byte))
-				}
-			}
-		}
-
-		// Get last tick of sensor
-		ticks, err := findTicksByRange(sensorID, 0, 0)
-		if err != nil {
-			log.Println(err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		if len(ticks) > 0 {
-			s.LastTick = &ticks[0].Datetime
-
-		}
-
-		sensors = append(sensors, s)
 	}
 
 	b, err := json.Marshal(sensors)
@@ -248,9 +197,6 @@ func getSensorDots(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "dots_per_day must be in range 0-24", http.StatusBadRequest)
 		return
 	}
-
-	redisClient := redisPool.Get()
-	defer redisClient.Close()
 
 	ticks, err := findTicksByScore(sensorID, start, end)
 	if err != nil {
@@ -314,33 +260,24 @@ func getSensorTicks(w http.ResponseWriter, r *http.Request) {
 }
 
 func getLogsV1(w http.ResponseWriter, r *http.Request) {
-	getLogs(w, r, loggingKeyV1)
+	writeLogs(w, r, loggingKeyV1)
 }
 
 func getLogsV2(w http.ResponseWriter, r *http.Request) {
-	getLogs(w, r, loggingKeyV2)
+	writeLogs(w, r, loggingKeyV2)
 }
 
-func getLogs(w http.ResponseWriter, r *http.Request, key string) {
-	redisClient := redisPool.Get()
-	defer redisClient.Close()
+func getDebugLogs(w http.ResponseWriter, r *http.Request) {
+	writeLogs(w, r, debugLogKey)
+}
 
-	bb, err := redisClient.Do("LRANGE", key, 0, 1000)
+func writeLogs(w http.ResponseWriter, r *http.Request, key string) {
+	b, err := getLogs(key)
 	if err != nil {
 		log.Println(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-
 	w.Header().Set("Content-Type", "text/plain")
-	for _, item := range bb.([]interface{}) {
-		s := string(item.([]byte))
-		s = strconv.Quote(s)
-		w.Write([]byte(s))
-		w.Write([]byte("\n\r"))
-	}
-}
-
-func getDebugLogs(w http.ResponseWriter, r *http.Request) {
-	getLogs(w, r, debugLogKey)
+	w.Write(b)
 }
