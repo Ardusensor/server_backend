@@ -14,9 +14,9 @@ import (
 func defineRoutes() {
 	r := mux.NewRouter()
 
-	r.HandleFunc("/api/controllers/{controller_id}/sensors", getCoordinatorSensors).Methods("GET")
-	r.HandleFunc("/api/controllers/{controller_id}", putCoordinator).Methods("POST", "PUT")
-	r.HandleFunc("/api/controllers/{controller_id}/{hash}", getCoordinator).Methods("GET")
+	r.HandleFunc("/api/coordinators/{coordinator_id}/sensors", getCoordinatorSensors).Methods("GET")
+	r.HandleFunc("/api/coordinators/{coordinator_id}", putCoordinator).Methods("POST", "PUT")
+	r.HandleFunc("/api/coordinators/{coordinator_id}/{hash}", getCoordinator).Methods("GET")
 
 	r.HandleFunc("/api/sensors/{sensor_id}", putSensor).Methods("POST", "PUT")
 	r.HandleFunc("/api/sensors/{sensor_id}/ticks", getSensorTicks).Methods("GET")
@@ -40,9 +40,9 @@ func defineRoutes() {
 func getCoordinator(w http.ResponseWriter, r *http.Request) {
 	log.Println(r)
 
-	coordinatorID, ok := mux.Vars(r)["controller_id"]
+	coordinatorID, ok := mux.Vars(r)["coordinator_id"]
 	if !ok {
-		http.Error(w, "Missing controller_id", http.StatusBadRequest)
+		http.Error(w, "Missing coordinator_id", http.StatusBadRequest)
 		return
 	}
 	hashToken, ok := mux.Vars(r)["hash"]
@@ -91,9 +91,9 @@ func getCoordinator(w http.ResponseWriter, r *http.Request) {
 func putCoordinator(w http.ResponseWriter, r *http.Request) {
 	log.Println(r)
 
-	coordinatorID, ok := mux.Vars(r)["controller_id"]
+	coordinatorID, ok := mux.Vars(r)["coordinator_id"]
 	if !ok {
-		http.Error(w, "Missing controller_id", http.StatusBadRequest)
+		http.Error(w, "Missing coordinator_id", http.StatusBadRequest)
 		return
 	}
 
@@ -162,9 +162,9 @@ func putSensor(w http.ResponseWriter, r *http.Request) {
 func getCoordinatorSensors(w http.ResponseWriter, r *http.Request) {
 	log.Println(r)
 
-	coordinatorID, ok := mux.Vars(r)["controller_id"]
+	coordinatorID, ok := mux.Vars(r)["coordinator_id"]
 	if !ok {
-		http.Error(w, "Missing controller_id", http.StatusBadRequest)
+		http.Error(w, "Missing coordinator_id", http.StatusBadRequest)
 		return
 	}
 
