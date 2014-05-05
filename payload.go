@@ -6,7 +6,7 @@ import (
 )
 
 type payload struct {
-	Coordinator coordinator `json:"coordinator"`
+	Coordinator coordinatorReading `json:"coordinator"`
 }
 
 type sensorReading struct {
@@ -18,7 +18,7 @@ type sensorReading struct {
 	SendCounter       int64  `json:"sendcounter"`
 }
 
-type coordinator struct {
+type coordinatorReading struct {
 	CoordinatorID  int64           `json:"coordinator_id"`
 	GSMCoverage    int64           `json:"gsm_coverage"`
 	BatteryVoltage int64           `json:"battery_voltage"`
