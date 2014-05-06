@@ -386,6 +386,8 @@ func parseControllerReading(input string) (*controllerReading, error) {
 }
 
 func handleUploadV2(buf *bytes.Buffer) (*upload, error) {
+	log.Println("handleUploadV2", buf.String())
+
 	go func(b *bytes.Buffer) {
 		if err := saveLog(b, loggingKeyV2); err != nil {
 			bugsnag.Notify(err)
@@ -495,6 +497,8 @@ func saveTicks(ticks []*tick) error {
 }
 
 func handleUploadV1(buf *bytes.Buffer) (*upload, error) {
+	log.Println("handleUploadV1", buf.String())
+
 	go func(b *bytes.Buffer) {
 		if err := saveLog(buf, loggingKeyV1); err != nil {
 			bugsnag.Notify(err)
@@ -502,9 +506,7 @@ func handleUploadV1(buf *bytes.Buffer) (*upload, error) {
 	}(buf)
 
 	var pl payload
-
-	err := json.Unmarshal(buf.Bytes(), &pl)
-	if err != nil {
+	if err := json.Unmarshal(buf.Bytes(), &pl); err != nil {
 		return nil, err
 	}
 
@@ -516,8 +518,8 @@ func handleUploadV1(buf *bytes.Buffer) (*upload, error) {
 	// instead convert all old format to new format and delete
 	// old format support afterwards
 	ticks := pl.convertToOldFormat()
-	err = saveTicks(ticks)
-	if err != nil {
+
+	if err := saveTicks(ticks); err != nil {
 		return nil, err
 	}
 
