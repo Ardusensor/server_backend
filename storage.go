@@ -220,6 +220,8 @@ func sensorsOfCoordinator(coordinatorID string) ([]*sensor, error) {
 				if list[0] != nil {
 					s.Lat = string(list[0].([]byte))
 				}
+			}
+			if len(list) > 1 {
 				if list[1] != nil {
 					s.Lng = string(list[1].([]byte))
 				}
