@@ -80,7 +80,7 @@ func main() {
 	defineRoutes()
 
 	if err := os.Mkdir(filepath.Join(*workdir, "log"), 0755); err != nil {
-		bugsnag.Notify(err)
+		log.Println(err)
 	}
 	if *environment == "production" || *environment == "staging" {
 		f, err := os.OpenFile(filepath.Join(*workdir, "log", *environment+".log"), os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0640)
