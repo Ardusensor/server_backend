@@ -225,6 +225,9 @@ func sensorsOfCoordinator(coordinatorID string) ([]*sensor, error) {
 
 	ids, err := redis.Strings(redisClient.Do("SMEMBERS", keyOfCoordinatorSensors(coordinatorID)))
 	if err != nil {
+		if err == redis.ErrNil {
+			return nil, nil
+		}
 		return nil, err
 	}
 
