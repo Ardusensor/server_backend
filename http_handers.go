@@ -15,9 +15,9 @@ func defineRoutes() {
 	r := mux.NewRouter()
 
 	r.HandleFunc("/api/coordinators/{coordinator_id}/sensors", getCoordinatorSensors).Methods("GET")
+	r.HandleFunc("/api/coordinators/{coordinator_id}/readings", getCoordinatorReadings).Methods("GET")
 	r.HandleFunc("/api/coordinators/{coordinator_id}", putCoordinator).Methods("POST", "PUT")
 	r.HandleFunc("/api/coordinators/{coordinator_id}/{hash}", getCoordinator).Methods("GET")
-	r.HandleFunc("/api/coordinators/{coordinator_id}/readings", getCoordinatorReadings).Methods("GET")
 
 	r.HandleFunc("/api/sensors/{sensor_id}", putSensor).Methods("POST", "PUT")
 	r.HandleFunc("/api/sensors/{sensor_id}/ticks", getSensorTicks).Methods("GET")
