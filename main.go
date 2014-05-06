@@ -497,15 +497,26 @@ func handleUploadV1(buf *bytes.Buffer) (*upload, error) {
 	}(buf)
 
 	var pl payload
+
 	err := json.Unmarshal(buf.Bytes(), &pl)
 	if err != nil {
 		return nil, err
 	}
+
+	if err := saveCoordinatorReading(pl.Coordinator); err != nil {
+		return nil, err
+	}
+
+	// FIXME: save ticks without converting to old format.
+	// instead convert all old format to new format and delete
+	// old format support afterwards
 	ticks := pl.convertToOldFormat()
 	err = saveTicks(ticks)
 	if err != nil {
 		return nil, err
 	}
+
+	// FIXME: delete, it's used in testing only
 	return &upload{
 		ticks: ticks,
 	}, nil
