@@ -17,6 +17,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/toggl/bugsnag"
 )
 
 var (
@@ -27,6 +29,7 @@ var (
 	environment   = flag.String("environment", "development", "environment")
 	redisHost     = flag.String("redis", "127.0.0.1:6379", "host:ip of Redis instance")
 	workdir       = flag.String("workdir", ".", "workdir of API, where log folder resides etc")
+	bugsnagAPIKey = flag.String("bugsnag_apikey", "", "")
 )
 
 const socketTimeoutSeconds = 30
@@ -69,13 +72,15 @@ type (
 func main() {
 	flag.Parse()
 
+	bugsnag.APIKey = *bugsnagAPIKey
+
 	redisPool = getRedisPool(*redisHost)
 	defer redisPool.Close()
 
 	defineRoutes()
 
 	if err := os.Mkdir(filepath.Join(*workdir, "log"), 0755); err != nil {
-		log.Println(err)
+		bugsnag.Notify(err)
 	}
 	if *environment == "production" || *environment == "staging" {
 		f, err := os.OpenFile(filepath.Join(*workdir, "log", *environment+".log"), os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0640)
@@ -114,7 +119,7 @@ func serveTCP(name string, port int, handler uploadHandler) {
 		for {
 			conn, err := ln.Accept()
 			if err != nil {
-				log.Println("Error while accepting connection:", err)
+				bugsnag.Notify(err)
 				continue
 			}
 			go handleConnection(conn, port, handler)
@@ -136,7 +141,7 @@ func handleConnection(conn net.Conn, port int, handler uploadHandler) {
 				if err == io.EOF {
 					break
 				}
-				log.Println("Error while reading from connection:", err)
+				bugsnag.Notify(err)
 				return
 			}
 			buf.Write(b[:n])
@@ -165,7 +170,7 @@ func handleConnection(conn net.Conn, port int, handler uploadHandler) {
 	start := time.Now()
 	_, err := handler(buf)
 	if err != nil {
-		log.Println("Error while processing upload:", err)
+		bugsnag.Notify(err)
 		return
 	}
 
@@ -383,7 +388,7 @@ func parseControllerReading(input string) (*controllerReading, error) {
 func handleUploadV2(buf *bytes.Buffer) (*upload, error) {
 	go func(b *bytes.Buffer) {
 		if err := saveLog(b, loggingKeyV2); err != nil {
-			log.Println(err)
+			bugsnag.Notify(err)
 		}
 	}(buf)
 
@@ -492,7 +497,7 @@ func saveTicks(ticks []*tick) error {
 func handleUploadV1(buf *bytes.Buffer) (*upload, error) {
 	go func(b *bytes.Buffer) {
 		if err := saveLog(buf, loggingKeyV1); err != nil {
-			log.Println(err)
+			bugsnag.Notify(err)
 		}
 	}(buf)
 
@@ -525,7 +530,7 @@ func handleUploadV1(buf *bytes.Buffer) (*upload, error) {
 func handleDebugUpload(buf *bytes.Buffer) (*upload, error) {
 	go func(b *bytes.Buffer) {
 		if err := saveLog(buf, debugLogKey); err != nil {
-			log.Println(err)
+			bugsnag.Notify(err)
 		}
 	}(buf)
 	return &upload{

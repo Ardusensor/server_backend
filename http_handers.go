@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"github.com/gorilla/mux"
+	"github.com/toggl/bugsnag"
 )
 
 func defineRoutes() {
@@ -51,7 +52,7 @@ func getCoordinator(w http.ResponseWriter, r *http.Request) {
 
 	token, err := coordinatorToken(c.ID)
 	if err != nil {
-		log.Println(err)
+		bugsnag.Notify(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -62,7 +63,7 @@ func getCoordinator(w http.ResponseWriter, r *http.Request) {
 
 	name, err := coordinatorName(c.ID)
 	if err != nil {
-		log.Println(err)
+		bugsnag.Notify(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -70,7 +71,7 @@ func getCoordinator(w http.ResponseWriter, r *http.Request) {
 
 	b, err := json.Marshal(c)
 	if err != nil {
-		log.Println(err)
+		bugsnag.Notify(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -102,7 +103,7 @@ func putCoordinator(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := saveCoordinatorName(coordinatorID, c.Name); err != nil {
-		log.Println(err)
+		bugsnag.Notify(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -133,7 +134,7 @@ func putSensor(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := saveSensorCoordinates(sensorID, s.Lat, s.Lng); err != nil {
-		log.Println(err)
+		bugsnag.Notify(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -152,14 +153,14 @@ func getCoordinatorSensors(w http.ResponseWriter, r *http.Request) {
 
 	sensors, err := sensorsOfCoordinator(coordinatorID)
 	if err != nil {
-		log.Println(err)
+		bugsnag.Notify(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	b, err := json.Marshal(sensors)
 	if err != nil {
-		log.Println(err)
+		bugsnag.Notify(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -201,7 +202,7 @@ func getSensorDots(w http.ResponseWriter, r *http.Request) {
 
 	ticks, err := findTicksByScore(sensorID, start, end)
 	if err != nil {
-		log.Println(err)
+		bugsnag.Notify(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -317,7 +318,7 @@ func getDebugLogs(w http.ResponseWriter, r *http.Request) {
 func writeLogs(w http.ResponseWriter, r *http.Request, key string) {
 	b, err := getLogs(key)
 	if err != nil {
-		log.Println(err)
+		bugsnag.Notify(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
