@@ -7,7 +7,7 @@ test:
 	go test
 
 run:
-	go run payload.go main.go http_handers.go
+	go run payload.go main.go http_handers.go storage.go
 
 clean:
 	rm -f bin/backend
