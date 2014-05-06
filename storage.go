@@ -34,6 +34,10 @@ func keyOfSensorTicks(sensorID string) string {
 	return fmt.Sprintf("osp:sensor:%s:ticks", sensorID)
 }
 
+func keyOfControllerReadings(coordinatorID int64) string {
+	return fmt.Sprintf("osp:coordinator:%v:readings", coordinatorID)
+}
+
 func saveLog(buf *bytes.Buffer, loggingKey string) error {
 	redisClient := redisPool.Get()
 	defer redisClient.Close()

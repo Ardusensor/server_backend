@@ -1,7 +1,10 @@
 package main
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
+	"log"
 	"time"
 )
 
@@ -27,6 +30,7 @@ type coordinatorReading struct {
 	Tries          int64           `json:"tries"`
 	Successes      int64           `json:"successes"`
 	SensorReadings []sensorReading `json:"sensor_readings,omitempty"`
+	CreatedAt      time.Time       `json:"created_at,omitempty"`
 }
 
 func (pl payload) convertToOldFormat() []*tick {
@@ -45,4 +49,23 @@ func (pl payload) convertToOldFormat() []*tick {
 		ticks = append(ticks, t)
 	}
 	return ticks
+}
+
+func saveCoordinatorReading(cr coordinatorReading) error {
+	log.Println("Saving coordinator reading", cr)
+
+	if !(cr.CoordinatorID > 0) {
+		return errors.New("Cannot save coordinator reading without coordinator ID")
+	}
+
+	b, err := json.Marshal(cr)
+	if err != nil {
+		return err
+	}
+
+	if err := saveReading(keyOfControllerReadings(cr.CoordinatorID), float64(cr.CreatedAt.Unix()), b); err != nil {
+		return err
+	}
+
+	return nil
 }
