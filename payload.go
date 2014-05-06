@@ -30,7 +30,7 @@ type coordinatorReading struct {
 	Tries          int64           `json:"tries"`
 	Successes      int64           `json:"successes"`
 	SensorReadings []sensorReading `json:"sensor_readings,omitempty"`
-	CreatedAt      time.Time       `json:"created_at,omitempty"`
+	CreatedAt      *time.Time      `json:"created_at,omitempty"`
 }
 
 func (pl payload) convertToOldFormat() []*tick {
@@ -58,12 +58,17 @@ func saveCoordinatorReading(cr coordinatorReading) error {
 		return errors.New("Cannot save coordinator reading without coordinator ID")
 	}
 
+	if cr.CreatedAt == nil {
+		now := time.Now()
+		cr.CreatedAt = &now
+	}
+
 	b, err := json.Marshal(cr)
 	if err != nil {
 		return err
 	}
 
-	if err := saveReading(keyOfControllerReadings(cr.CoordinatorID), float64(cr.CreatedAt.Unix()), b); err != nil {
+	if err := saveReading(keyOfCoordinatorReadings(cr.CoordinatorID), float64(cr.CreatedAt.Unix()), b); err != nil {
 		return err
 	}
 

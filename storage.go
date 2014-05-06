@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -34,7 +35,7 @@ func keyOfSensorTicks(sensorID string) string {
 	return fmt.Sprintf("osp:sensor:%s:ticks", sensorID)
 }
 
-func keyOfControllerReadings(coordinatorID int64) string {
+func keyOfCoordinatorReadings(coordinatorID int64) string {
 	return fmt.Sprintf("osp:coordinator:%v:readings", coordinatorID)
 }
 
@@ -93,6 +94,28 @@ func findTicksByRange(sensorID string, startIndex, stopIndex int) ([]*tick, erro
 	}
 
 	return ticks, nil
+}
+
+func coordinatorReadings(coordinatorID int64, startIndex, stopIndex int) ([]*coordinatorReading, error) {
+	redisClient := redisPool.Get()
+	defer redisClient.Close()
+
+	bb, err := redisClient.Do("ZREVRANGE", keyOfCoordinatorReadings(coordinatorID), startIndex, stopIndex)
+	if err != nil {
+		return nil, err
+	}
+
+	var result []*coordinatorReading
+	for _, value := range bb.([]interface{}) {
+		b := value.([]byte)
+		var cr coordinatorReading
+		if err := json.Unmarshal(b, &cr); err != nil {
+			return nil, err
+		}
+		result = append(result, &cr)
+	}
+
+	return result, nil
 }
 
 func findTicksByScore(sensorID string, start, end int) ([]*tick, error) {
@@ -179,8 +202,7 @@ func addSensorToCoordinator(sensorID, coordinatorID string) error {
 	if _, err := redisClient.Do("HSET", keySensorToController, sensorID, coordinatorID); err != nil {
 		return err
 	}
-	if _, err := redisClient.Do("SADD",
-		keyOfCoordinatorSensors(coordinatorID), sensorID); err != nil {
+	if _, err := redisClient.Do("SADD", keyOfCoordinatorSensors(coordinatorID), sensorID); err != nil {
 		return err
 	}
 	return nil

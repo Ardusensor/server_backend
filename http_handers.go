@@ -16,6 +16,7 @@ func defineRoutes() {
 	r.HandleFunc("/api/coordinators/{coordinator_id}/sensors", getCoordinatorSensors).Methods("GET")
 	r.HandleFunc("/api/coordinators/{coordinator_id}", putCoordinator).Methods("POST", "PUT")
 	r.HandleFunc("/api/coordinators/{coordinator_id}/{hash}", getCoordinator).Methods("GET")
+	r.HandleFunc("/api/coordinators/{coordinator_id}/readings", getCoordinatorReadings).Methods("GET")
 
 	r.HandleFunc("/api/sensors/{sensor_id}", putSensor).Methods("POST", "PUT")
 	r.HandleFunc("/api/sensors/{sensor_id}/ticks", getSensorTicks).Methods("GET")
@@ -244,6 +245,48 @@ func getSensorTicks(w http.ResponseWriter, r *http.Request) {
 	}
 
 	result, err := findTicksByScore(sensorID, start, end)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	b, err := json.Marshal(result)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write(b)
+}
+
+func getCoordinatorReadings(w http.ResponseWriter, r *http.Request) {
+	log.Println(r)
+
+	s, exists := mux.Vars(r)["coordinator_id"]
+	if !exists {
+		http.Error(w, "Missing coordinator_id", http.StatusBadRequest)
+		return
+	}
+	coordinatorID, err := strconv.ParseInt(s, 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid coordinator_id", http.StatusBadRequest)
+		return
+	}
+
+	start, err := strconv.Atoi(r.FormValue("start"))
+	if err != nil {
+		http.Error(w, "Missing or invalid start", http.StatusBadRequest)
+		return
+	}
+
+	end, err := strconv.Atoi(r.FormValue("end"))
+	if err != nil {
+		http.Error(w, "Missing or invalid end", http.StatusBadRequest)
+		return
+	}
+
+	result, err := coordinatorReadings(coordinatorID, start, end)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
