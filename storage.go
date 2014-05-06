@@ -163,7 +163,15 @@ func coordinatorToken(coordinatorID string) (string, error) {
 	redisClient := redisPool.Get()
 	defer redisClient.Close()
 
-	return redis.String(redisClient.Do("HGET", keyOfCoordinator(coordinatorID), "token"))
+	token, err := redis.String(redisClient.Do("HGET", keyOfCoordinator(coordinatorID), "token"))
+	if err != nil {
+		if redis.ErrNil == err {
+			return "", nil
+		}
+		return "", err
+	}
+
+	return token, nil
 }
 
 func saveCoordinatorName(coordinatorID, name string) error {

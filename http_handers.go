@@ -55,6 +55,11 @@ func getCoordinator(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if "" == token {
+		http.Error(w, "Invalid coordinator_id", http.StatusBadRequest)
+		return
+	}
+
 	if token != hashToken {
 		http.Error(w, "Incorrect token for this coordinator", http.StatusUnauthorized)
 		return
