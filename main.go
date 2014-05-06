@@ -424,7 +424,7 @@ func (t *tick) Save() error {
 		return err
 	}
 
-	if err := saveTick(keyOfSensorTicks(t.SensorID), float64(t.Datetime.Unix()), b); err != nil {
+	if err := saveReading(keyOfSensorTicks(t.SensorID), float64(t.Datetime.Unix()), b); err != nil {
 		return err
 	}
 

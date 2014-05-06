@@ -111,7 +111,7 @@ func findTicksByScore(sensorID string, start, end int) ([]*tick, error) {
 	return ticks, nil
 }
 
-func saveTick(key string, score float64, b []byte) error {
+func saveReading(key string, score float64, b []byte) error {
 	redisClient := redisPool.Get()
 	defer redisClient.Close()
 
