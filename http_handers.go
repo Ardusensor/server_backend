@@ -23,9 +23,6 @@ func defineRoutes() {
 	r.HandleFunc("/api/sensors/{sensor_id}/ticks", getSensorTicks).Methods("GET")
 	r.HandleFunc("/api/sensors/{sensor_id}/dots", getSensorDots).Methods("GET")
 
-	r.HandleFunc("/api/debug_log", getDebugLogs).Methods("GET")
-	r.HandleFunc("/api/debug_logs", getDebugLogs).Methods("GET")
-
 	r.HandleFunc("/api/v1/log", getLogsV1).Methods("GET")
 	r.HandleFunc("/api/v1/logs", getLogsV1).Methods("GET")
 	r.HandleFunc("/api/v2/log", getLogsV2).Methods("GET")
@@ -314,10 +311,6 @@ func getLogsV1(w http.ResponseWriter, r *http.Request) {
 
 func getLogsV2(w http.ResponseWriter, r *http.Request) {
 	writeLogs(w, r, loggingKeyV2)
-}
-
-func getDebugLogs(w http.ResponseWriter, r *http.Request) {
-	writeLogs(w, r, debugLogKey)
 }
 
 func writeLogs(w http.ResponseWriter, r *http.Request, key string) {

@@ -24,7 +24,6 @@ import (
 var (
 	portV1        = flag.Int("port", 8090, "TCP upload port, V1 format")
 	portV2        = flag.Int("portv2", 18150, "TCP upload port, V2 format")
-	debugPort     = flag.Int("debug_port", 18151, "TCP upload port for free-form text debug info")
 	webserverPort = flag.Int("webserver_port", 8084, "HTTP port")
 	environment   = flag.String("environment", "development", "environment")
 	redisHost     = flag.String("redis", "127.0.0.1:6379", "host:ip of Redis instance")
@@ -95,7 +94,6 @@ func main() {
 
 	serveTCP("V1", *portV1, handleUploadV1)
 	serveTCP("V2", *portV2, handleUploadV2)
-	serveTCP("debug", *debugPort, handleDebugUpload)
 
 	log.Println("API started on port", *webserverPort)
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", *webserverPort), http.DefaultServeMux))
@@ -526,17 +524,6 @@ func handleUploadV1(buf *bytes.Buffer) (*upload, error) {
 	// FIXME: delete, it's used in testing only
 	return &upload{
 		ticks: ticks,
-	}, nil
-}
-
-func handleDebugUpload(buf *bytes.Buffer) (*upload, error) {
-	go func(b *bytes.Buffer) {
-		if err := saveLog(buf, debugLogKey); err != nil {
-			bugsnag.Notify(err)
-		}
-	}(buf)
-	return &upload{
-		debugLog: buf.String(),
 	}, nil
 }
 

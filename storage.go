@@ -17,7 +17,6 @@ const keyControllers = "osp:controllers"
 const keySensorToController = "osp:sensor_to_controller"
 const loggingKeyV1 = "osp:logs"
 const loggingKeyV2 = "osp:logs:v2"
-const debugLogKey = "osp:debug_logs"
 
 func keyOfSensor(sensorID string) string {
 	return fmt.Sprintf("osp:sensor:%s:fields", sensorID)
