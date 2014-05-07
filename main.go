@@ -22,8 +22,8 @@ import (
 )
 
 var (
-	portV1        = flag.Int("port", 8090, "TCP upload port, V1 format")
-	portV2        = flag.Int("portv2", 18150, "TCP upload port, V2 format")
+	csvPort       = flag.Int("port", 8090, "TCP upload port, CSV format")
+	jsonPort      = flag.Int("portv2", 18150, "TCP upload port, JSON format")
 	webserverPort = flag.Int("webserver_port", 8084, "HTTP port")
 	environment   = flag.String("environment", "development", "environment")
 	redisHost     = flag.String("redis", "127.0.0.1:6379", "host:ip of Redis instance")
@@ -92,8 +92,8 @@ func main() {
 
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
-	serveTCP("V1", *portV1, handleUploadV1)
-	serveTCP("V2", *portV2, handleUploadV2)
+	serveTCP("V1", *csvPort, handleCSVUpload)
+	serveTCP("V2", *jsonPort, handleJSONUpload)
 
 	log.Println("API started on port", *webserverPort)
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", *webserverPort), http.DefaultServeMux))
@@ -383,42 +383,37 @@ func parseControllerReading(input string) (*controllerReading, error) {
 	return c, nil
 }
 
-func handleUploadV2(buf *bytes.Buffer) (*upload, error) {
-	log.Println("handleUploadV2", buf.String())
+func handleJSONUpload(buf *bytes.Buffer) (*upload, error) {
+	log.Println("handleJSONUpload", buf.String())
 
 	go func(b *bytes.Buffer) {
-		if err := saveLog(b, loggingKeyV2); err != nil {
+		if err := saveLog(buf, loggingKeyV1); err != nil {
 			bugsnag.Notify(err)
 		}
 	}(buf)
 
-	messages, err := parseMessages(buf)
-	if err != nil {
+	var pl payload
+	if err := json.Unmarshal(buf.Bytes(), &pl); err != nil {
 		return nil, err
 	}
-	if len(messages) < 2 {
-		return nil, errors.New("Invalid package: at least 1 sensor reading and 1 controller reading expected")
-	}
-	cr, err := parseControllerReading(messages[len(messages)-1])
-	if err != nil {
+
+	if err := saveCoordinatorReading(pl.Coordinator); err != nil {
 		return nil, err
 	}
-	ticks, err := parseTicks(messages[0:len(messages)-1], parseTickV2)
-	if err != nil {
+
+	// FIXME: save ticks without converting to old format.
+	// instead convert all old format to new format and delete
+	// old format support afterwards
+	ticks := pl.convertToOldFormat()
+
+	if err := saveTicks(ticks); err != nil {
 		return nil, err
 	}
-	for _, t := range ticks {
-		t.coordinatorID = cr.ControllerID
-	}
-	err = saveTicks(ticks)
-	if err != nil {
-		return nil, err
-	}
-	result := &upload{
-		cr:    *cr,
+
+	// FIXME: delete, it's used in testing only
+	return &upload{
 		ticks: ticks,
-	}
-	return result, nil
+	}, nil
 }
 
 func (t *tick) Save() error {
@@ -494,37 +489,42 @@ func saveTicks(ticks []*tick) error {
 	return nil
 }
 
-func handleUploadV1(buf *bytes.Buffer) (*upload, error) {
-	log.Println("handleUploadV1", buf.String())
+func handleCSVUpload(buf *bytes.Buffer) (*upload, error) {
+	log.Println("handleCSVUpload", buf.String())
 
 	go func(b *bytes.Buffer) {
-		if err := saveLog(buf, loggingKeyV1); err != nil {
+		if err := saveLog(b, loggingKeyV2); err != nil {
 			bugsnag.Notify(err)
 		}
 	}(buf)
 
-	var pl payload
-	if err := json.Unmarshal(buf.Bytes(), &pl); err != nil {
+	messages, err := parseMessages(buf)
+	if err != nil {
 		return nil, err
 	}
-
-	if err := saveCoordinatorReading(pl.Coordinator); err != nil {
+	if len(messages) < 2 {
+		return nil, errors.New("Invalid package: at least 1 sensor reading and 1 controller reading expected")
+	}
+	cr, err := parseControllerReading(messages[len(messages)-1])
+	if err != nil {
 		return nil, err
 	}
-
-	// FIXME: save ticks without converting to old format.
-	// instead convert all old format to new format and delete
-	// old format support afterwards
-	ticks := pl.convertToOldFormat()
-
-	if err := saveTicks(ticks); err != nil {
+	ticks, err := parseTicks(messages[0:len(messages)-1], parseTickV2)
+	if err != nil {
 		return nil, err
 	}
-
-	// FIXME: delete, it's used in testing only
-	return &upload{
+	for _, t := range ticks {
+		t.coordinatorID = cr.ControllerID
+	}
+	err = saveTicks(ticks)
+	if err != nil {
+		return nil, err
+	}
+	result := &upload{
+		cr:    *cr,
 		ticks: ticks,
-	}, nil
+	}
+	return result, nil
 }
 
 func (t *tick) setTemperatureFromSensorReading(sensorReading float64) {

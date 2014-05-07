@@ -28,14 +28,14 @@ func (s *TestSuite) TearDownSuite(c *C) {
 func (s *TestSuite) TestProcessExample(c *C) {
 	b, err := ioutil.ReadFile(filepath.Join("testdata", "example.json"))
 	c.Assert(err, Equals, nil)
-	u, err := handleUploadV1(bytes.NewBuffer(b))
+	u, err := handleJSONUpload(bytes.NewBuffer(b))
 	c.Assert(err, Equals, nil)
 	c.Assert(len(u.ticks), Equals, 20)
 }
 
-func (s *TestSuite) TestHandleV2(c *C) {
+func (s *TestSuite) TestHandleCSV(c *C) {
 	now := time.Now()
-	u, err := handleUploadV2(bytes.NewBufferString("<13;347;886;199;51>(132207)<13;22;196>"))
+	u, err := handleCSVUpload(bytes.NewBufferString("<13;347;886;199;51>(132207)<13;22;196>"))
 	c.Assert(err, Equals, nil)
 	c.Assert(u, Not(Equals), nil)
 	c.Assert(len(u.ticks), Equals, 1)
@@ -54,9 +54,9 @@ func (s *TestSuite) TestHandleV2(c *C) {
 	c.Assert(u.cr.Datetime.Unix(), Equals, now.Unix())
 }
 
-func (s *TestSuite) TestHandleV2withSpaces(c *C) {
+func (s *TestSuite) TestHandleCSVWithSpaces(c *C) {
 	now := time.Now()
-	u, err := handleUploadV2(bytes.NewBufferString("<10;344;875;195;49>                <12;350;895;159;18>(34204)<10;344;875;195;49>                <12;350;895;159;18>(411279)<12;350;895;159;18>(525538)<13;347;888;195;57>(1101950)<17;343;883;159;51>(1229059)<16;145;379;159;17>(1253399)<11;338;879;287;16>(1416289)<15;345;1023;211;17>(1515808)<13;21;350>"))
+	u, err := handleCSVUpload(bytes.NewBufferString("<10;344;875;195;49>                <12;350;895;159;18>(34204)<10;344;875;195;49>                <12;350;895;159;18>(411279)<12;350;895;159;18>(525538)<13;347;888;195;57>(1101950)<17;343;883;159;51>(1229059)<16;145;379;159;17>(1253399)<11;338;879;287;16>(1416289)<15;345;1023;211;17>(1515808)<13;21;350>"))
 	c.Assert(err, Equals, nil)
 	c.Assert(u, Not(Equals), nil)
 	c.Assert(len(u.ticks), Equals, 10)
@@ -85,9 +85,9 @@ func (s *TestSuite) TestHandleV2withSpaces(c *C) {
 	c.Assert(u.cr.Datetime.Unix(), Equals, now.Unix())
 }
 
-func (s *TestSuite) TestHandleV2garbage(c *C) {
+func (s *TestSuite) TestHandleCSVGarbage(c *C) {
 	now := time.Now()
-	u, err := handleUploadV2(bytes.NewBufferString("<11;335;838;343;200>><10;344;873;211;175>40>><10;344;871;211;177>41>><10;344;873;211;179>42>>~<13;23;200>	"))
+	u, err := handleCSVUpload(bytes.NewBufferString("<11;335;838;343;200>><10;344;873;211;175>40>><10;344;871;211;177>41>><10;344;873;211;179>42>>~<13;23;200>	"))
 	c.Assert(err, Equals, nil)
 	c.Assert(u, Not(Equals), nil)
 	c.Assert(len(u.ticks), Equals, 4)
