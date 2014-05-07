@@ -15,8 +15,8 @@ var redisPool *redis.Pool
 
 const keyControllers = "osp:controllers"
 const keySensorToController = "osp:sensor_to_controller"
-const loggingKeyV1 = "osp:logs"
-const loggingKeyV2 = "osp:logs:v2"
+const loggingKeyCSV = "osp:logs"
+const loggingKeyJSON = "osp:logs:v2"
 
 func keyOfSensor(sensorID string) string {
 	return fmt.Sprintf("osp:sensor:%s:fields", sensorID)

@@ -287,7 +287,7 @@ func averageMatching(ticks []*tick, start time.Time, end time.Time) tick {
 	}
 }
 
-func parseTickV2(input string) (*tick, error) {
+func parseJSONTick(input string) (*tick, error) {
 	t := &tick{
 		Datetime: time.Now(),
 		Version:  2,
@@ -387,7 +387,7 @@ func handleJSONUpload(buf *bytes.Buffer) (*upload, error) {
 	log.Println("handleJSONUpload", buf.String())
 
 	go func(b *bytes.Buffer) {
-		if err := saveLog(buf, loggingKeyV1); err != nil {
+		if err := saveLog(buf, loggingKeyJSON); err != nil {
 			bugsnag.Notify(err)
 		}
 	}(buf)
@@ -493,7 +493,7 @@ func handleCSVUpload(buf *bytes.Buffer) (*upload, error) {
 	log.Println("handleCSVUpload", buf.String())
 
 	go func(b *bytes.Buffer) {
-		if err := saveLog(b, loggingKeyV2); err != nil {
+		if err := saveLog(b, loggingKeyCSV); err != nil {
 			bugsnag.Notify(err)
 		}
 	}(buf)
@@ -509,7 +509,7 @@ func handleCSVUpload(buf *bytes.Buffer) (*upload, error) {
 	if err != nil {
 		return nil, err
 	}
-	ticks, err := parseTicks(messages[0:len(messages)-1], parseTickV2)
+	ticks, err := parseTicks(messages[0:len(messages)-1], parseJSONTick)
 	if err != nil {
 		return nil, err
 	}

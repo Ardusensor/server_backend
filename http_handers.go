@@ -23,10 +23,10 @@ func defineRoutes() {
 	r.HandleFunc("/api/sensors/{sensor_id}/ticks", getSensorTicks).Methods("GET")
 	r.HandleFunc("/api/sensors/{sensor_id}/dots", getSensorDots).Methods("GET")
 
-	r.HandleFunc("/api/v1/log", getLogsV1).Methods("GET")
-	r.HandleFunc("/api/v1/logs", getLogsV1).Methods("GET")
-	r.HandleFunc("/api/v2/log", getLogsV2).Methods("GET")
-	r.HandleFunc("/api/v2/logs", getLogsV2).Methods("GET")
+	r.HandleFunc("/api/v1/log", getCSVLogs).Methods("GET")
+	r.HandleFunc("/api/v1/logs", getCSVLogs).Methods("GET")
+	r.HandleFunc("/api/v2/log", getJSONLogs).Methods("GET")
+	r.HandleFunc("/api/v2/logs", getJSONLogs).Methods("GET")
 
 	http.Handle("/", r)
 }
@@ -305,12 +305,12 @@ func getCoordinatorReadings(w http.ResponseWriter, r *http.Request) {
 	w.Write(b)
 }
 
-func getLogsV1(w http.ResponseWriter, r *http.Request) {
-	writeLogs(w, r, loggingKeyV1)
+func getCSVLogs(w http.ResponseWriter, r *http.Request) {
+	writeLogs(w, r, loggingKeyCSV)
 }
 
-func getLogsV2(w http.ResponseWriter, r *http.Request) {
-	writeLogs(w, r, loggingKeyV2)
+func getJSONLogs(w http.ResponseWriter, r *http.Request) {
+	writeLogs(w, r, loggingKeyJSON)
 }
 
 func writeLogs(w http.ResponseWriter, r *http.Request, key string) {
