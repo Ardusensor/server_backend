@@ -22,8 +22,8 @@ import (
 )
 
 var (
-	csvPort       = flag.Int("port", 8090, "TCP upload port, CSV format")
-	jsonPort      = flag.Int("portv2", 18150, "TCP upload port, JSON format")
+	csvPort       = flag.Int("csv_port", 8090, "TCP upload port, CSV format")
+	jsonPort      = flag.Int("json_port", 18150, "TCP upload port, JSON format")
 	webserverPort = flag.Int("webserver_port", 8084, "HTTP port")
 	environment   = flag.String("environment", "development", "environment")
 	redisHost     = flag.String("redis", "127.0.0.1:6379", "host:ip of Redis instance")
