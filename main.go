@@ -92,8 +92,8 @@ func main() {
 
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
-	serveTCP("V1", *csvPort, handleCSVUpload)
-	serveTCP("V2", *jsonPort, handleJSONUpload)
+	serveTCP("CSV", *csvPort, handleCSVUpload)
+	serveTCP("JSON", *jsonPort, handleJSONUpload)
 
 	log.Println("API started on port", *webserverPort)
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", *webserverPort), http.DefaultServeMux))
