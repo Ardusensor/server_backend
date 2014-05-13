@@ -528,7 +528,7 @@ func handleCSVUpload(buf *bytes.Buffer) (*upload, error) {
 }
 
 func (t *tick) setTemperatureFromSensorReading(sensorReading float64) {
-	t.Temperature = ((sensorReading * 0.001292) - 0.5) / 0.01
+	t.Temperature = ((sensorReading * 0.001292) - 0.4) / 0.01
 }
 
 func (t *tick) setBatteryVoltageFromSensorReading(sensorReading float64) {
