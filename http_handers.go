@@ -85,31 +85,17 @@ func getCoordinator(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := coordinatorToken(coordinatorID)
+	c, err := loadCoordinator(coordinatorID)
 	if err != nil {
 		bugsnag.Notify(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	if "" == token {
-		http.Error(w, "Invalid coordinator_id", http.StatusBadRequest)
-		return
-	}
-
-	if token != hashToken {
+	if hashToken != c.Token {
 		http.Error(w, "Incorrect token for this coordinator", http.StatusUnauthorized)
 		return
 	}
-
-	name, err := coordinatorName(coordinatorID)
-	if err != nil {
-		bugsnag.Notify(err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	c := &coordinator{ID: coordinatorID, Token: hashToken, Name: name}
 
 	b, err := json.Marshal(c)
 	if err != nil {
@@ -144,7 +130,7 @@ func putCoordinator(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := saveCoordinatorLabel(coordinatorID, c.Name); err != nil {
+	if err := saveCoordinatorLabel(coordinatorID, c.Label); err != nil {
 		bugsnag.Notify(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

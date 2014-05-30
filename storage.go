@@ -145,7 +145,7 @@ func saveReading(key string, score float64, b []byte) error {
 	return err
 }
 
-func coordinators() ([]coordinatorAdminView, error) {
+func coordinators() ([]*coordinator, error) {
 	redisClient := redisPool.Get()
 	defer redisClient.Close()
 
@@ -157,19 +157,13 @@ func coordinators() ([]coordinatorAdminView, error) {
 		return nil, err
 	}
 
-	var result []coordinatorAdminView
+	var result []*coordinator
 	for _, id := range ids {
 		c, err := loadCoordinator(id)
 		if err != nil {
 			return nil, err
 		}
-		coordinator := coordinatorAdminView{
-			ID:    id,
-			Name:  c.Name,
-			Token: c.Token,
-			URL:   fmt.Sprintf("http://ardusensor.com/index.html#/%s/%s", id, c.Token),
-		}
-		result = append(result, coordinator)
+		result = append(result, c)
 	}
 
 	return result, nil
@@ -186,35 +180,6 @@ func saveCoordinatorToken(coordinatorID string) error {
 		return err
 	}
 	return nil
-}
-
-func coordinatorToken(coordinatorID string) (string, error) {
-	redisClient := redisPool.Get()
-	defer redisClient.Close()
-
-	token, err := redis.String(redisClient.Do("HGET", keyOfCoordinator(coordinatorID), "token"))
-	if err != nil {
-		if redis.ErrNil == err {
-			return "", nil
-		}
-		return "", err
-	}
-
-	return token, nil
-}
-
-func coordinatorName(coordinatorID string) (string, error) {
-	redisClient := redisPool.Get()
-	defer redisClient.Close()
-
-	name, err := redis.String(redisClient.Do("HGET", keyOfCoordinator(coordinatorID), "name"))
-	if err != nil {
-		if redis.ErrNil == err {
-			return coordinatorID, nil
-		}
-		return "", err
-	}
-	return name, nil
 }
 
 func loadCoordinator(coordinatorID string) (*coordinator, error) {
@@ -237,14 +202,15 @@ func loadCoordinator(coordinatorID string) (*coordinator, error) {
 			continue
 		}
 		switch fieldName {
-		case "name":
-			c.Name = field
 		case "token":
 			c.Token = field
 		case "label":
 			c.Label = field
 		}
 	}
+
+	c.ID = coordinatorID
+	c.URL = fmt.Sprintf("http://ardusensor.com/index.html#/%s/%s", coordinatorID, c.Token)
 
 	return c, nil
 }

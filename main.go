@@ -40,13 +40,7 @@ const defaultCoordinatorID = "1"
 type (
 	coordinator struct {
 		ID    string `json:"id"`
-		Name  string `json:"name"`
 		Label string `json:"label"`
-		Token string
-	}
-	coordinatorAdminView struct {
-		ID    string `json:"id"`
-		Name  string `json:"name"`
 		Token string `json:"token"`
 		URL   string `json:"url"`
 	}
