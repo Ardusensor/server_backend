@@ -47,6 +47,7 @@ type (
 		ID    string `json:"id"`
 		Name  string `json:"name"`
 		Token string `json:"token"`
+		URL   string `json:"url"`
 	}
 	controllerReading struct {
 		ControllerID   string    `json:"controller_id"`

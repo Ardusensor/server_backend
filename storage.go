@@ -171,6 +171,7 @@ func coordinators() ([]coordinatorAdminView, error) {
 			ID:    id,
 			Name:  name,
 			Token: token,
+			URL:   fmt.Sprintf("http://ardusensor.com/index.html#/%s/%s", id, token),
 		}
 		result = append(result, coordinator)
 	}
