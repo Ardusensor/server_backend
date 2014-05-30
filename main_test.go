@@ -42,7 +42,7 @@ func (s *TestSuite) TestHandleCSV(c *C) {
 
 	tk := u.ticks[0]
 	c.Assert(tk.SensorID, Equals, "13")
-	c.Assert(tk.Temperature, Equals, float64(4.832399999999998))
+	c.Assert(tk.Temperature, Equals, float64(-15.167599999999997))
 	c.Assert(tk.BatteryVoltage, Equals, float64(3.40224))
 	c.Assert(tk.Humidity, Equals, int64(199))
 	c.Assert(tk.Sendcounter, Equals, int64(51))
@@ -64,7 +64,7 @@ func (s *TestSuite) TestHandleCSVWithSpaces(c *C) {
 	tk := u.ticks[0]
 	c.Assert(tk.coordinatorID, Equals, "13")
 	c.Assert(tk.SensorID, Equals, "10")
-	c.Assert(tk.Temperature, Equals, float64(4.444799999999999))
+	c.Assert(tk.Temperature, Equals, float64(-15.555199999999996))
 	c.Assert(tk.BatteryVoltage, Equals, float64(3.36))
 	c.Assert(tk.Humidity, Equals, int64(195))
 	c.Assert(tk.Sendcounter, Equals, int64(49))
@@ -73,7 +73,7 @@ func (s *TestSuite) TestHandleCSVWithSpaces(c *C) {
 	tk = u.ticks[len(u.ticks)-1]
 	c.Assert(tk.coordinatorID, Equals, "13")
 	c.Assert(tk.SensorID, Equals, "15")
-	c.Assert(tk.Temperature, Equals, float64(4.5739999999999945))
+	c.Assert(tk.Temperature, Equals, float64(-15.426))
 	c.Assert(tk.BatteryVoltage, Equals, float64(3.9283200000000003))
 	c.Assert(tk.Humidity, Equals, int64(211))
 	c.Assert(tk.Sendcounter, Equals, int64(17))
@@ -95,7 +95,7 @@ func (s *TestSuite) TestHandleCSVGarbage(c *C) {
 	tk := u.ticks[0]
 	c.Assert(tk.coordinatorID, Equals, "13")
 	c.Assert(tk.SensorID, Equals, "11")
-	c.Assert(tk.Temperature, Equals, float64(3.281999999999996))
+	c.Assert(tk.Temperature, Equals, float64(-16.718))
 	c.Assert(tk.BatteryVoltage, Equals, float64(3.21792))
 	c.Assert(tk.Humidity, Equals, int64(343))
 	c.Assert(tk.Sendcounter, Equals, int64(200))
@@ -104,7 +104,7 @@ func (s *TestSuite) TestHandleCSVGarbage(c *C) {
 	tk = u.ticks[len(u.ticks)-1]
 	c.Assert(tk.coordinatorID, Equals, "13")
 	c.Assert(tk.SensorID, Equals, "10")
-	c.Assert(tk.Temperature, Equals, float64(4.444799999999999))
+	c.Assert(tk.Temperature, Equals, float64(-15.555199999999996))
 	c.Assert(tk.BatteryVoltage, Equals, float64(3.35232))
 	c.Assert(tk.Humidity, Equals, int64(211))
 	c.Assert(tk.Sendcounter, Equals, int64(179))
