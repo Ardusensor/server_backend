@@ -42,6 +42,7 @@ func keyOfCoordinatorReadings(coordinatorID int64) string {
 func saveLog(buf *bytes.Buffer, loggingKey string) error {
 	redisClient := redisPool.Get()
 	defer redisClient.Close()
+
 	if _, err := redisClient.Do("LPUSH", loggingKey, time.Now().String()+" "+buf.String()); err != nil {
 		return err
 	}
@@ -245,18 +246,49 @@ func addSensorToCoordinator(sensorID, coordinatorID string) error {
 	return nil
 }
 
-func (s sensor) save() error {
+func (s *sensor) save() error {
 	if len(s.ID) == 0 {
 		return errors.New("missing sensor ID")
 	}
 	redisClient := redisPool.Get()
 	defer redisClient.Close()
 
-	_, err := redisClient.Do("HMSET", keyOfSensor(s.ID), "lat", s.Lat, "lng", s.Lng, "label", s.Label)
+	if err := s.calculateCalibrationConstant(); err != nil {
+		return err
+	}
+
+	_, err := redisClient.Do("HMSET", keyOfSensor(s.ID),
+		"lat", s.Lat,
+		"lng", s.Lng,
+		"label", s.Label)
 	if err != nil {
 		return err
 	}
 	return err
+}
+
+func (s *sensor) calculateCalibrationConstant() error {
+	if s.CurrentTemperature == nil {
+		return nil
+	}
+	lastTick, err := lastTickOfSensor(s.ID)
+	if err != nil {
+		return err
+	}
+	if lastTick != nil {
+		newValue := lastTick.CalculatedTemperature - *s.CurrentTemperature
+		s.CalibrationConstant = &newValue
+		if s.CalibrationConstant != nil {
+			redisClient := redisPool.Get()
+			defer redisClient.Close()
+
+			if _, err := redisClient.Do("HSET", keyOfSensor(s.ID), "calibration_constant", *s.CalibrationConstant); err != nil {
+				return err
+			}
+		}
+	}
+	s.CurrentTemperature = nil
+	return nil
 }
 
 func sensorsOfCoordinator(coordinatorID string) ([]*sensor, error) {
@@ -277,32 +309,60 @@ func sensorsOfCoordinator(coordinatorID string) ([]*sensor, error) {
 			return nil, errors.New("Invalid or missing sensor ID")
 		}
 
-		// Get lat, lng of sensor
-		list, err := redis.Strings(redisClient.Do("HMGET", keyOfSensor(sensorID), "lat", "lng", "label"))
+		s, err := loadSensor(coordinatorID, sensorID)
 		if err != nil {
 			return nil, err
 		}
-		s := &sensor{
-			ID:           sensorID,
-			ControllerID: coordinatorID,
-			Lat:          list[0],
-			Lng:          list[1],
-			Label:        list[2],
-		}
 
-		// Get last tick of sensor
-		ticks, err := findTicksByRange(sensorID, 0, 0)
+		lastTick, err := lastTickOfSensor(sensorID)
 		if err != nil {
 			return nil, err
 		}
-		if len(ticks) > 0 {
-			s.LastTick = &ticks[0].Datetime
-
+		if lastTick != nil {
+			s.LastTick = &lastTick.Datetime
 		}
 
 		sensors = append(sensors, s)
 	}
 	return sensors, nil
+}
+
+func loadSensor(coordinatorID, sensorID string) (*sensor, error) {
+	redisClient := redisPool.Get()
+	defer redisClient.Close()
+
+	list, err := redis.Strings(redisClient.Do("HMGET", keyOfSensor(sensorID), "lat", "lng", "label", "calibration_constant"))
+	if err != nil {
+		return nil, err
+	}
+	var cc *float64
+	if len(list[3]) > 0 && list[3] != "<nil>" {
+		value, err := strconv.ParseFloat(list[3], 64)
+		if err != nil {
+			return nil, err
+		}
+		cc = &value
+	}
+
+	return &sensor{
+		ID:                  sensorID,
+		ControllerID:        coordinatorID,
+		Lat:                 list[0],
+		Lng:                 list[1],
+		Label:               list[2],
+		CalibrationConstant: cc,
+	}, nil
+}
+
+func lastTickOfSensor(sensorID string) (*tick, error) {
+	ticks, err := findTicksByRange(sensorID, 0, 0)
+	if err != nil {
+		return nil, err
+	}
+	if len(ticks) > 0 {
+		return ticks[0], nil
+	}
+	return nil, nil
 }
 
 func getLogs(key string, coordinatorID int) ([]byte, error) {
@@ -323,6 +383,5 @@ func getLogs(key string, coordinatorID int) ([]byte, error) {
 			buf.WriteString("\n\r")
 		}
 	}
-
 	return buf.Bytes(), nil
 }

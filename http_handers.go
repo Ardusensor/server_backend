@@ -178,7 +178,15 @@ func putSensor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	b, err = json.Marshal(s)
+	if err != nil {
+		bugsnag.Notify(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	w.WriteHeader(http.StatusOK)
+	w.Write(b)
 }
 
 func getCoordinatorSensors(w http.ResponseWriter, r *http.Request) {

@@ -52,23 +52,26 @@ type (
 		BatteryVoltage float64   `json:"battery_voltage"`
 	}
 	sensor struct {
-		ID           string     `json:"id"`
-		LastTick     *time.Time `json:"last_tick,omitempty"`
-		ControllerID string     `json:"controller_id"`
-		Lat          string     `json:"lat,omitempty"`
-		Lng          string     `json:"lng,omitempty"`
-		Label        string     `json:"label"`
+		ID                  string     `json:"id"`
+		LastTick            *time.Time `json:"last_tick,omitempty"`
+		ControllerID        string     `json:"controller_id"`
+		Lat                 string     `json:"lat,omitempty"`
+		Lng                 string     `json:"lng,omitempty"`
+		Label               string     `json:"label"`
+		CalibrationConstant *float64   `json:"calibration_constant,omitempty"`
+		CurrentTemperature  *float64   `json:"current_temperature,omitempty"`
 	}
 	tick struct {
-		SensorID        string    `json:"sensor_id,omitempty"`
-		Datetime        time.Time `json:"datetime"`
-		NextDataSession string    `json:"next_data_session,omitempty"`      // sec
-		BatteryVoltage  float64   `json:"battery_voltage_visual,omitempty"` // mV
-		Temperature     float64   `json:"temperature,omitempty"`            // encoded temperature
-		Humidity        int64     `json:"sensor2,omitempty"`                // humidity
-		RadioQuality    int64     `json:"radio_quality,omitempty"`          // (LQI=0..255)
-		Sendcounter     int64     `json:"send_counter,omitempty"`           // (LQI=0..255)
-		Version         int64     `json:"version"`
+		SensorID              string    `json:"sensor_id,omitempty"`
+		Datetime              time.Time `json:"datetime"`
+		NextDataSession       string    `json:"next_data_session,omitempty"`      // sec
+		BatteryVoltage        float64   `json:"battery_voltage_visual,omitempty"` // mV
+		CalculatedTemperature float64   `json:"temperature,omitempty"`            // encoded temperature
+		AdjustedTemperature   float64   `json:"adjusted_temperature,omitempty"`
+		Humidity              int64     `json:"sensor2,omitempty"`       // humidity
+		RadioQuality          int64     `json:"radio_quality,omitempty"` // (LQI=0..255)
+		Sendcounter           int64     `json:"send_counter,omitempty"`  // (LQI=0..255)
+		Version               int64     `json:"version"`
 		// is not serialized
 		coordinatorID string
 	}
@@ -208,8 +211,11 @@ func unmarshalTickJSON(b []byte) (*tick, error) {
 	if t.BatteryVoltage, err = parseFloat(values["battery_voltage_visual"]); err != nil {
 		log.Println("Warning: Invalid or missing battery_voltage in JSON", err.Error())
 	}
-	if t.Temperature, err = parseFloat(values["temperature"]); err != nil {
-		log.Println("Warning: Invalid or missing sensor1 in JSON", err.Error())
+	if t.CalculatedTemperature, err = parseFloat(values["temperature"]); err != nil {
+		log.Println("Warning: Invalid or missing temperature in JSON", err.Error())
+	}
+	if t.AdjustedTemperature, err = parseFloat(values["adjusted_temperature"]); err != nil {
+		log.Println("Warning: Invalid or missing adjusted_temperature in JSON", err.Error())
 	}
 	if t.Humidity, err = parseInt(values["sensor2"]); err != nil {
 		log.Println("Warning: Invalid or missing sensor2 in JSON", err.Error())
@@ -274,7 +280,7 @@ func averageMatching(ticks []*tick, start time.Time, end time.Time) tick {
 		}
 		avgBatteryVoltage += tick.BatteryVoltage
 		avgRadioQuality += tick.RadioQuality
-		avgTemperature += tick.Temperature
+		avgTemperature += tick.CalculatedTemperature
 		avgHumidity += tick.Humidity
 		matching += 1
 	}
@@ -285,15 +291,15 @@ func averageMatching(ticks []*tick, start time.Time, end time.Time) tick {
 		avgHumidity /= matching
 	}
 	return tick{
-		Datetime:       start,
-		BatteryVoltage: avgBatteryVoltage,
-		RadioQuality:   avgRadioQuality,
-		Temperature:    avgTemperature,
-		Humidity:       avgHumidity,
+		Datetime:              start,
+		BatteryVoltage:        avgBatteryVoltage,
+		RadioQuality:          avgRadioQuality,
+		CalculatedTemperature: avgTemperature,
+		Humidity:              avgHumidity,
 	}
 }
 
-func parseJSONTick(input string) (*tick, error) {
+func parseJSONTick(coordinatorID string, input string) (*tick, error) {
 	t := &tick{
 		Datetime: time.Now(),
 		Version:  2,
@@ -309,11 +315,16 @@ func parseJSONTick(input string) (*tick, error) {
 		return nil, errors.New("Missing sensor ID")
 	}
 
+	sensor, err := loadSensor(coordinatorID, t.SensorID)
+	if err != nil {
+		return nil, err
+	}
+
 	sensorReading, err := parseFloat(parts[1])
 	if err != nil {
 		return nil, err
 	}
-	t.setTemperatureFromSensorReading(sensorReading)
+	t.setTemperatureFromSensorReading(sensorReading, sensor)
 
 	sensorReading, err = parseFloat(parts[2])
 	if err != nil {
@@ -410,7 +421,10 @@ func handleJSONUpload(buf *bytes.Buffer) (*upload, error) {
 	// FIXME: save ticks without converting to old format.
 	// instead convert all old format to new format and delete
 	// old format support afterwards
-	ticks := pl.convertToOldFormat()
+	ticks, err := pl.convertToOldFormat()
+	if err != nil {
+		return nil, err
+	}
 
 	if err := saveTicks(ticks); err != nil {
 		return nil, err
@@ -460,7 +474,7 @@ func (t *tick) Save() error {
 
 func (t tick) String() string {
 	return fmt.Sprintf("coordinatorID: %v, datetime: %v, sensor ID: %v, next: %v, battery: %v, sensor1: %v, humidity: %v, radio: %v",
-		t.coordinatorID, t.Datetime, t.SensorID, t.NextDataSession, t.BatteryVoltage, t.Temperature, t.Humidity, t.RadioQuality)
+		t.coordinatorID, t.Datetime, t.SensorID, t.NextDataSession, t.BatteryVoltage, t.CalculatedTemperature, t.Humidity, t.RadioQuality)
 }
 
 func tokenForCoordinator(coordinatorID string) string {
@@ -469,15 +483,15 @@ func tokenForCoordinator(coordinatorID string) string {
 	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
-type tickParser func(input string) (*tick, error)
+type tickParser func(coordinatorID string, input string) (*tick, error)
 
-func parseTicks(input []string, parse tickParser) ([]*tick, error) {
+func parseTicks(coordinatorID string, input []string, parse tickParser) ([]*tick, error) {
 	var result []*tick
 	for _, s := range input {
 		if len(s) == 0 {
 			continue
 		}
-		t, err := parse(s)
+		t, err := parse(coordinatorID, s)
 		if err != nil {
 			return nil, err
 		}
@@ -515,7 +529,7 @@ func handleCSVUpload(buf *bytes.Buffer) (*upload, error) {
 	if err != nil {
 		return nil, err
 	}
-	ticks, err := parseTicks(messages[0:len(messages)-1], parseJSONTick)
+	ticks, err := parseTicks(cr.ControllerID, messages[0:len(messages)-1], parseJSONTick)
 	if err != nil {
 		return nil, err
 	}
@@ -533,8 +547,11 @@ func handleCSVUpload(buf *bytes.Buffer) (*upload, error) {
 	return result, nil
 }
 
-func (t *tick) setTemperatureFromSensorReading(sensorReading float64) {
-	t.Temperature = ((sensorReading * 0.001292) - 0.6) / 0.01
+func (t *tick) setTemperatureFromSensorReading(sensorReading float64, s *sensor) {
+	t.CalculatedTemperature = ((sensorReading * 0.001292) - 0.6) / 0.01
+	if s.CalibrationConstant != nil {
+		t.AdjustedTemperature = t.CalculatedTemperature + *s.CalibrationConstant
+	}
 }
 
 func (t *tick) setBatteryVoltageFromSensorReading(sensorReading float64) {

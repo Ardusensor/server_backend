@@ -33,7 +33,7 @@ type coordinatorReading struct {
 	CreatedAt      *time.Time      `json:"created_at,omitempty"`
 }
 
-func (pl payload) convertToOldFormat() []*tick {
+func (pl payload) convertToOldFormat() ([]*tick, error) {
 	var ticks []*tick
 	for _, sensorReading := range pl.Coordinator.SensorReadings {
 		t := &tick{
@@ -44,11 +44,15 @@ func (pl payload) convertToOldFormat() []*tick {
 			Humidity:      sensorReading.Moisture,
 			Sendcounter:   sensorReading.SendCounter,
 		}
-		t.setTemperatureFromSensorReading(float64(sensorReading.SensorTemperature))
+		sensor, err := loadSensor(t.coordinatorID, sensorReading.SensorID)
+		if err != nil {
+			return nil, err
+		}
+		t.setTemperatureFromSensorReading(float64(sensorReading.SensorTemperature), sensor)
 		t.setBatteryVoltageFromSensorReading(float64(sensorReading.BatteryVoltage))
 		ticks = append(ticks, t)
 	}
-	return ticks
+	return ticks, nil
 }
 
 func saveCoordinatorReading(cr coordinatorReading) error {
