@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"crypto/md5"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -29,6 +30,8 @@ var (
 	redisHost     = flag.String("redis", "127.0.0.1:6379", "host:ip of Redis instance")
 	workdir       = flag.String("workdir", ".", "workdir of API, where log folder resides etc")
 	bugsnagAPIKey = flag.String("bugsnag_apikey", "", "")
+	adminUsername = flag.String("admin_username", "foo", "Admin API username")
+	adminPassword = flag.String("admin_password", "bar", "Admin API password")
 )
 
 const socketTimeoutSeconds = 30
@@ -538,4 +541,35 @@ func (t *tick) setTemperatureFromSensorReading(sensorReading float64) {
 
 func (t *tick) setBatteryVoltageFromSensorReading(sensorReading float64) {
 	t.BatteryVoltage = sensorReading * 0.00384
+}
+
+type authData struct {
+	Username string
+	Password string
+}
+
+func parseToken(r *http.Request) (*authData, error) {
+	auth := r.Header.Get("Authorization")
+	if 0 == len(auth) {
+		return nil, nil
+	}
+	if !strings.Contains(auth, "Basic ") {
+		// Unsupported auth scheme, for example, NTLM
+		return nil, nil
+	}
+	encodedToken := strings.Replace(auth, "Basic ", "", -1)
+	b, err := base64.StdEncoding.DecodeString(encodedToken)
+	if err != nil {
+		return nil, err
+	}
+	pair := strings.SplitN(bytes.NewBuffer(b).String(), ":", 2)
+	if len(pair) != 2 {
+		return nil, nil
+	}
+	username := strings.TrimSpace(pair[0])
+	password := strings.TrimSpace(pair[1])
+	if len(username) == 0 || len(password) == 0 {
+		return nil, nil
+	}
+	return &authData{Username: username, Password: password}, nil
 }

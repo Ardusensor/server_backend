@@ -36,7 +36,23 @@ func defineRoutes() {
 func getAdminCoordinators(w http.ResponseWriter, r *http.Request) {
 	log.Println(r)
 
-	// FIXME: require password
+	auth, err := parseToken(r)
+	if err != nil {
+		bugsnag.Notify(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if auth == nil {
+		w.Header().Set("WWW-Authenticate", "Basic realm=\"Ardusensor admin\"")
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	if auth.Username != *adminUsername || auth.Password != *adminPassword {
+		w.Header().Set("WWW-Authenticate", "Basic realm=\"Ardusensor admin\"")
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
 	coordinators, err := coordinators()
 	if err != nil {
 		bugsnag.Notify(err)
