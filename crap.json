@@ -23,7 +23,7 @@
           "ip": "ardusensor.com"
         }
       ],
-      "restart_command": "sudo /sbin/stop ardusensor_backend_production; sudo /sbin/start ardusensor_backend_production",
+      "restart_command": "sudo /sbin/stop ardusensor_backend; sudo /sbin/start ardusensor_backend",
       "deploydir": "/home/ardusensor/backend"
     }
   ],
