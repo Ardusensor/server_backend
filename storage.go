@@ -169,7 +169,7 @@ func coordinators() ([]*coordinator, error) {
 	return result, nil
 }
 
-func saveCoordinatorToken(coordinatorID string) error {
+func setCoordinatorToken(coordinatorID string) error {
 	redisClient := redisPool.Get()
 	defer redisClient.Close()
 
@@ -215,7 +215,7 @@ func loadCoordinator(coordinatorID string) (*coordinator, error) {
 	return c, nil
 }
 
-func saveCoordinatorLabel(coordinatorID, label string) error {
+func setCoordinatorLabel(coordinatorID, label string) error {
 	redisClient := redisPool.Get()
 	defer redisClient.Close()
 
@@ -243,11 +243,14 @@ func addSensorToCoordinator(sensorID, coordinatorID string) error {
 	return nil
 }
 
-func saveSensorCoordinates(sensorID, latitude, longitude string) error {
+func (s sensor) save() error {
+	if len(s.ID) == 0 {
+		return errors.New("missing sensor ID")
+	}
 	redisClient := redisPool.Get()
 	defer redisClient.Close()
 
-	_, err := redisClient.Do("HMSET", keyOfSensor(sensorID), "lat", latitude, "lng", longitude)
+	_, err := redisClient.Do("HMSET", keyOfSensor(s.ID), "lat", s.Lat, "lng", s.Lng, "label", s.Label)
 	if err != nil {
 		return err
 	}

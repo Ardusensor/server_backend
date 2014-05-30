@@ -130,7 +130,7 @@ func putCoordinator(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := saveCoordinatorLabel(coordinatorID, c.Label); err != nil {
+	if err := setCoordinatorLabel(coordinatorID, c.Label); err != nil {
 		bugsnag.Notify(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -160,8 +160,9 @@ func putSensor(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	s.ID = sensorID
 
-	if err := saveSensorCoordinates(sensorID, s.Lat, s.Lng); err != nil {
+	if err := s.save(); err != nil {
 		bugsnag.Notify(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

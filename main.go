@@ -446,7 +446,7 @@ func (t *tick) Save() error {
 		t.coordinatorID = defaultCoordinatorID
 	}
 
-	if err := saveCoordinatorToken(t.coordinatorID); err != nil {
+	if err := setCoordinatorToken(t.coordinatorID); err != nil {
 		return err
 	}
 
