@@ -56,6 +56,7 @@ type (
 		ControllerID string     `json:"controller_id"`
 		Lat          string     `json:"lat,omitempty"`
 		Lng          string     `json:"lng,omitempty"`
+		Label        string     `json:"label"`
 	}
 	tick struct {
 		SensorID        string    `json:"sensor_id,omitempty"`

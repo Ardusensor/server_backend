@@ -271,25 +271,18 @@ func sensorsOfCoordinator(coordinatorID string) ([]*sensor, error) {
 		if len(sensorID) == 0 {
 			return nil, errors.New("Invalid or missing sensor ID")
 		}
-		s := &sensor{ID: sensorID, ControllerID: coordinatorID}
 
 		// Get lat, lng of sensor
-		bb, err := redisClient.Do("HMGET", keyOfSensor(sensorID), "lat", "lng")
+		list, err := redis.Strings(redisClient.Do("HMGET", keyOfSensor(sensorID), "lat", "lng", "label"))
 		if err != nil {
 			return nil, err
 		}
-		if bb != nil {
-			list := bb.([]interface{})
-			if len(list) > 0 {
-				if list[0] != nil {
-					s.Lat = string(list[0].([]byte))
-				}
-			}
-			if len(list) > 1 {
-				if list[1] != nil {
-					s.Lng = string(list[1].([]byte))
-				}
-			}
+		s := &sensor{
+			ID:           sensorID,
+			ControllerID: coordinatorID,
+			Lat:          list[0],
+			Lng:          list[1],
+			Label:        list[2],
 		}
 
 		// Get last tick of sensor
