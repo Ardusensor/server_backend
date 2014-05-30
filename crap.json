@@ -13,6 +13,18 @@
       ],
       "restart_command": "sudo /sbin/stop ardusensor_backend_staging; sudo /sbin/start ardusensor_backend_staging",
       "deploydir": "/home/ardusensor/backend"
+    },
+    {
+      "name": "production",
+      "servers": [
+        {
+          "port": "666",
+          "user": "ardusensor",
+          "ip": "ardusensor.com"
+        }
+      ],
+      "restart_command": "sudo /sbin/stop ardusensor_backend_production; sudo /sbin/start ardusensor_backend_production",
+      "deploydir": "/home/ardusensor/backend"
     }
   ],
   "built_app_dir": "dist",
