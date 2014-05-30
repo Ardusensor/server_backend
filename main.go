@@ -40,6 +40,11 @@ type (
 		Name  string `json:"name"`
 		Token string
 	}
+	coordinatorAdminView struct {
+		ID    string `json:"id"`
+		Name  string `json:"name"`
+		Token string `json:"token"`
+	}
 	controllerReading struct {
 		ControllerID   string    `json:"controller_id"`
 		Datetime       time.Time `json:"datetime"`

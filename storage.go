@@ -13,7 +13,7 @@ import (
 
 var redisPool *redis.Pool
 
-const keyControllers = "osp:controllers"
+const keyCoordinators = "osp:controllers"
 const keySensorToController = "osp:sensor_to_controller"
 const loggingKeyCSV = "osp:logs"
 const loggingKeyJSON = "osp:logs:v2"
@@ -145,11 +145,44 @@ func saveReading(key string, score float64, b []byte) error {
 	return err
 }
 
+func coordinators() ([]coordinatorAdminView, error) {
+	redisClient := redisPool.Get()
+	defer redisClient.Close()
+
+	ids, err := redis.Strings(redisClient.Do("SMEMBERS", keyCoordinators))
+	if err != nil {
+		if err == redis.ErrNil {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	var result []coordinatorAdminView
+	for _, id := range ids {
+		name, err := coordinatorName(id)
+		if err != nil {
+			return nil, err
+		}
+		token, err := coordinatorToken(id)
+		if err != nil {
+			return nil, err
+		}
+		coordinator := coordinatorAdminView{
+			ID:    id,
+			Name:  name,
+			Token: token,
+		}
+		result = append(result, coordinator)
+	}
+
+	return result, nil
+}
+
 func saveCoordinatorToken(coordinatorID string) error {
 	redisClient := redisPool.Get()
 	defer redisClient.Close()
 
-	if _, err := redisClient.Do("SADD", keyControllers, coordinatorID); err != nil {
+	if _, err := redisClient.Do("SADD", keyCoordinators, coordinatorID); err != nil {
 		return err
 	}
 	if _, err := redisClient.Do("HSET", keyOfCoordinator(coordinatorID), "token", tokenForCoordinator(coordinatorID)); err != nil {
@@ -177,7 +210,7 @@ func saveCoordinatorName(coordinatorID, name string) error {
 	redisClient := redisPool.Get()
 	defer redisClient.Close()
 
-	if _, err := redisClient.Do("SADD", keyControllers, coordinatorID); err != nil {
+	if _, err := redisClient.Do("SADD", keyCoordinators, coordinatorID); err != nil {
 		return err
 	}
 	_, err := redisClient.Do("HSET", keyOfCoordinator(coordinatorID), "name", name)

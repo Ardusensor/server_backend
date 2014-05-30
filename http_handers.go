@@ -23,12 +23,36 @@ func defineRoutes() {
 	r.HandleFunc("/api/sensors/{sensor_id}/ticks", getSensorTicks).Methods("GET")
 	r.HandleFunc("/api/sensors/{sensor_id}/dots", getSensorDots).Methods("GET")
 
+	r.HandleFunc("/api/admin/coordinators", getAdminCoordinators).Methods("GET")
+
 	r.HandleFunc("/api/v1/log", getCSVLogs).Methods("GET")
 	r.HandleFunc("/api/v1/logs", getCSVLogs).Methods("GET")
 	r.HandleFunc("/api/v2/log", getJSONLogs).Methods("GET")
 	r.HandleFunc("/api/v2/logs", getJSONLogs).Methods("GET")
 
 	http.Handle("/", r)
+}
+
+func getAdminCoordinators(w http.ResponseWriter, r *http.Request) {
+	log.Println(r)
+
+	// FIXME: require password
+	coordinators, err := coordinators()
+	if err != nil {
+		bugsnag.Notify(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	b, err := json.MarshalIndent(coordinators, "", "\t")
+	if err != nil {
+		bugsnag.Notify(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write(b)
 }
 
 func getCoordinator(w http.ResponseWriter, r *http.Request) {
