@@ -159,19 +159,15 @@ func coordinators() ([]coordinatorAdminView, error) {
 
 	var result []coordinatorAdminView
 	for _, id := range ids {
-		name, err := coordinatorName(id)
-		if err != nil {
-			return nil, err
-		}
-		token, err := coordinatorToken(id)
+		c, err := loadCoordinator(id)
 		if err != nil {
 			return nil, err
 		}
 		coordinator := coordinatorAdminView{
 			ID:    id,
-			Name:  name,
-			Token: token,
-			URL:   fmt.Sprintf("http://ardusensor.com/index.html#/%s/%s", id, token),
+			Name:  c.Name,
+			Token: c.Token,
+			URL:   fmt.Sprintf("http://ardusensor.com/index.html#/%s/%s", id, c.Token),
 		}
 		result = append(result, coordinator)
 	}
@@ -207,6 +203,52 @@ func coordinatorToken(coordinatorID string) (string, error) {
 	return token, nil
 }
 
+func coordinatorName(coordinatorID string) (string, error) {
+	redisClient := redisPool.Get()
+	defer redisClient.Close()
+
+	name, err := redis.String(redisClient.Do("HGET", keyOfCoordinator(coordinatorID), "name"))
+	if err != nil {
+		if redis.ErrNil == err {
+			return coordinatorID, nil
+		}
+		return "", err
+	}
+	return name, nil
+}
+
+func loadCoordinator(coordinatorID string) (*coordinator, error) {
+	redisClient := redisPool.Get()
+	defer redisClient.Close()
+
+	fields, err := redis.Strings(redisClient.Do("HGETALL", keyOfCoordinator(coordinatorID)))
+	if err != nil {
+		if redis.ErrNil == err {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	c := &coordinator{}
+	var fieldName string
+	for i, field := range fields {
+		if 0 == i%2 {
+			fieldName = field
+			continue
+		}
+		switch fieldName {
+		case "name":
+			c.Name = field
+		case "token":
+			c.Token = field
+		case "label":
+			c.Label = field
+		}
+	}
+
+	return c, nil
+}
+
 func saveCoordinatorName(coordinatorID, name string) error {
 	redisClient := redisPool.Get()
 	defer redisClient.Close()
@@ -220,20 +262,6 @@ func saveCoordinatorName(coordinatorID, name string) error {
 	}
 
 	return nil
-}
-
-func coordinatorName(coordinatorID string) (string, error) {
-	redisClient := redisPool.Get()
-	defer redisClient.Close()
-
-	name, err := redis.String(redisClient.Do("HGET", keyOfCoordinator(coordinatorID), "name"))
-	if err != nil {
-		if redis.ErrNil == err {
-			return coordinatorID, nil
-		}
-		return "", err
-	}
-	return name, nil
 }
 
 func addSensorToCoordinator(sensorID, coordinatorID string) error {
