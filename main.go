@@ -39,10 +39,11 @@ const defaultCoordinatorID = "1"
 
 type (
 	coordinator struct {
-		ID    string `json:"id"`
-		Label string `json:"label"`
-		Token string `json:"token"`
-		URL   string `json:"url"`
+		ID     string `json:"id"`
+		Label  string `json:"label"`
+		Token  string `json:"token"`
+		URL    string `json:"url"`
+		LogURL string `json:"log_url"`
 	}
 	controllerReading struct {
 		ControllerID   string    `json:"controller_id"`

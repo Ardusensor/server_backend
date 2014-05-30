@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/garyburd/redigo/redis"
@@ -211,6 +212,7 @@ func loadCoordinator(coordinatorID string) (*coordinator, error) {
 
 	c.ID = coordinatorID
 	c.URL = fmt.Sprintf("http://ardusensor.com/index.html#/%s/%s", coordinatorID, c.Token)
+	c.LogURL = fmt.Sprintf("http://ardusensor.com/api/coordinators/%s/log", coordinatorID)
 
 	return c, nil
 }
@@ -303,7 +305,7 @@ func sensorsOfCoordinator(coordinatorID string) ([]*sensor, error) {
 	return sensors, nil
 }
 
-func getLogs(key string) ([]byte, error) {
+func getLogs(key string, coordinatorID int) ([]byte, error) {
 	redisClient := redisPool.Get()
 	defer redisClient.Close()
 
@@ -315,9 +317,11 @@ func getLogs(key string) ([]byte, error) {
 	buf := bytes.NewBuffer(nil)
 	for _, item := range bb.([]interface{}) {
 		s := string(item.([]byte))
-		s = strconv.Quote(s)
-		buf.WriteString(s)
-		buf.WriteString("\n\r")
+		if coordinatorID == 0 || strings.Contains(s, fmt.Sprintf("coordinator_id\":%d", coordinatorID)) {
+			s = strconv.Quote(s)
+			buf.WriteString(s)
+			buf.WriteString("\n\r")
+		}
 	}
 
 	return buf.Bytes(), nil

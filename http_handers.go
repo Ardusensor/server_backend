@@ -16,6 +16,7 @@ func defineRoutes() {
 
 	r.HandleFunc("/api/coordinators/{coordinator_id}/sensors", getCoordinatorSensors).Methods("GET")
 	r.HandleFunc("/api/coordinators/{coordinator_id}/readings", getCoordinatorReadings).Methods("GET")
+	r.HandleFunc("/api/coordinators/{coordinator_id}/log", getCoordinatorLog).Methods("GET")
 	r.HandleFunc("/api/coordinators/{coordinator_id}", putCoordinator).Methods("POST", "PUT")
 	r.HandleFunc("/api/coordinators/{coordinator_id}/{hash}", getCoordinator).Methods("GET")
 
@@ -69,6 +70,15 @@ func getAdminCoordinators(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	w.Write(b)
+}
+
+func getCoordinatorLog(w http.ResponseWriter, r *http.Request) {
+	coordinatorID, err := strconv.Atoi(mux.Vars(r)["coordinator_id"])
+	if err != nil {
+		http.Error(w, "Missing or invalid coordinator_id", http.StatusBadRequest)
+		return
+	}
+	writeLogs(w, r, loggingKeyJSON, coordinatorID)
 }
 
 func getCoordinator(w http.ResponseWriter, r *http.Request) {
@@ -333,15 +343,15 @@ func getCoordinatorReadings(w http.ResponseWriter, r *http.Request) {
 }
 
 func getCSVLogs(w http.ResponseWriter, r *http.Request) {
-	writeLogs(w, r, loggingKeyCSV)
+	writeLogs(w, r, loggingKeyCSV, 0)
 }
 
 func getJSONLogs(w http.ResponseWriter, r *http.Request) {
-	writeLogs(w, r, loggingKeyJSON)
+	writeLogs(w, r, loggingKeyJSON, 0)
 }
 
-func writeLogs(w http.ResponseWriter, r *http.Request, key string) {
-	b, err := getLogs(key)
+func writeLogs(w http.ResponseWriter, r *http.Request, key string, coordinatorID int) {
+	b, err := getLogs(key, coordinatorID)
 	if err != nil {
 		bugsnag.Notify(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
