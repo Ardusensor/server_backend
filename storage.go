@@ -249,14 +249,14 @@ func loadCoordinator(coordinatorID string) (*coordinator, error) {
 	return c, nil
 }
 
-func saveCoordinatorName(coordinatorID, name string) error {
+func saveCoordinatorLabel(coordinatorID, label string) error {
 	redisClient := redisPool.Get()
 	defer redisClient.Close()
 
 	if _, err := redisClient.Do("SADD", keyCoordinators, coordinatorID); err != nil {
 		return err
 	}
-	_, err := redisClient.Do("HSET", keyOfCoordinator(coordinatorID), "name", name)
+	_, err := redisClient.Do("HSET", keyOfCoordinator(coordinatorID), "label", label)
 	if err != nil {
 		return err
 	}

@@ -144,7 +144,7 @@ func putCoordinator(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := saveCoordinatorName(coordinatorID, c.Name); err != nil {
+	if err := saveCoordinatorLabel(coordinatorID, c.Name); err != nil {
 		bugsnag.Notify(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
