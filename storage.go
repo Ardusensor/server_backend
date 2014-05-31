@@ -76,22 +76,30 @@ func findCoordinatorIDBySensorID(sensorID string) (string, error) {
 	return id, nil
 }
 
+func findTicksByScore(sensorID string, start, end int) ([]*tick, error) {
+	return findTicksUsingCommand("ZRANGEBYSCORE", sensorID, start, end)
+}
+
 func findTicksByRange(sensorID string, startIndex, stopIndex int) ([]*tick, error) {
+	return findTicksUsingCommand("ZREVRANGE", sensorID, startIndex, stopIndex)
+}
+
+func findTicksUsingCommand(command, sensorID string, start, end int) ([]*tick, error) {
 	redisClient := redisPool.Get()
 	defer redisClient.Close()
 
-	bb, err := redisClient.Do("ZREVRANGE", keyOfSensorTicks(sensorID), startIndex, stopIndex)
+	bb, err := redisClient.Do(command, keyOfSensorTicks(sensorID), start, end)
 	if err != nil {
 		return nil, err
 	}
 
 	var ticks []*tick
 	for _, value := range bb.([]interface{}) {
-		t, err := unmarshalTickJSON(value.([]byte))
-		if err != nil {
+		var t tick
+		if err := json.Unmarshal(value.([]byte), &t); err != nil {
 			return nil, err
 		}
-		ticks = append(ticks, t)
+		ticks = append(ticks, &t)
 	}
 
 	return ticks, nil
@@ -117,26 +125,6 @@ func coordinatorReadings(coordinatorID int64, startIndex, stopIndex int) ([]*coo
 	}
 
 	return result, nil
-}
-
-func findTicksByScore(sensorID string, start, end int) ([]*tick, error) {
-	redisClient := redisPool.Get()
-	defer redisClient.Close()
-
-	bb, err := redisClient.Do("ZRANGEBYSCORE", keyOfSensorTicks(sensorID), start, end)
-	if err != nil {
-		return nil, err
-	}
-
-	var ticks []*tick
-	for _, value := range bb.([]interface{}) {
-		t, err := unmarshalTickJSON(value.([]byte))
-		if err != nil {
-			return nil, err
-		}
-		ticks = append(ticks, t)
-	}
-	return ticks, nil
 }
 
 func saveReading(key string, score float64, b []byte) error {
@@ -276,7 +264,7 @@ func (s *sensor) calculateCalibrationConstant() error {
 		return err
 	}
 	if lastTick != nil {
-		newValue := lastTick.CalculatedTemperature - *s.CurrentTemperature
+		newValue := lastTick.Temperature - *s.CurrentTemperature
 		s.CalibrationConstant = &newValue
 		if s.CalibrationConstant != nil {
 			redisClient := redisPool.Get()

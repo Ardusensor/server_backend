@@ -57,7 +57,7 @@ func (s *TestSuite) TestPayloadConvertToOldFormat(c *C) {
 	t := ticks[0]
 	c.Assert(t.SensorID, Equals, "13A20040B421AC")
 	c.Assert(t.BatteryVoltage, Equals, float64(3.06048))
-	c.Assert(t.CalculatedTemperature, Equals, float64(20.233199999999997))
+	c.Assert(t.Temperature, Equals, float64(20.233199999999997))
 	c.Assert(t.Humidity, Equals, int64(92))
 	c.Assert(t.Sendcounter, Equals, int64(18))
 	c.Assert(t.coordinatorID, Equals, fmt.Sprintf("%d", pl.Coordinator.CoordinatorID))
