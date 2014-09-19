@@ -36,6 +36,7 @@ func (s *TestSuite) TestParsePayload(c *C) {
 	c.Assert(sr.SensorTemperature, Equals, int64(621))
 	c.Assert(sr.Moisture, Equals, int64(92))
 	c.Assert(sr.SendCounter, Equals, int64(18))
+	c.Assert(sr.PacketRSSI, Equals, int64(132))
 }
 
 func (s *TestSuite) TestPayloadConvertToOldFormat(c *C) {

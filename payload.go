@@ -19,6 +19,7 @@ type sensorReading struct {
 	SensorTemperature int64  `json:"sensor_temperature"`
 	Moisture          int64  `json:"moisture"`
 	SendCounter       int64  `json:"sendcounter"`
+	PacketRSSI        int64  `json:"packet_rssi"`
 }
 
 type coordinatorReading struct {
@@ -59,6 +60,9 @@ type sensor struct {
 	CurrentTemperature  *float64   `json:"current_temperature,omitempty"`
 }
 
+// Deprecated type.
+// Should use the new, reading types instead.
+// FIXME: convert existing, saved ticks to new format, then drop this:
 type tick struct {
 	SensorID        string    `json:"sensor_id,omitempty"`
 	Datetime        time.Time `json:"datetime"`
@@ -70,6 +74,7 @@ type tick struct {
 	RadioQuality    int64     `json:"radio_quality,omitempty"` // (LQI=0..255)
 	Sendcounter     int64     `json:"send_counter,omitempty"`  // (LQI=0..255)
 	Version         int64     `json:"version"`
+	PacketRSSI      int64     `json:"packet_rssi"`
 	// is not serialized
 	coordinatorID string
 }
@@ -84,6 +89,7 @@ func (pl payload) convertToOldFormat() ([]*tick, error) {
 			SensorID:      sensorReading.SensorID,
 			Humidity:      sensorReading.Moisture,
 			Sendcounter:   sensorReading.SendCounter,
+			PacketRSSI:    sensorReading.PacketRSSI,
 		}
 		sensor, err := loadSensor(t.coordinatorID, sensorReading.SensorID)
 		if err != nil {

@@ -14,7 +14,8 @@
             "cpu_temperature":338,
             "sensor_temperature":621,
             "moisture":92,
-            "sendcounter":18
+            "sendcounter":18,
+            "packet_rssi":132
          },
          {
             "sensor_id":"13A20040B421AC",
