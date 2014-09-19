@@ -23,7 +23,6 @@ import (
 )
 
 var (
-	csvPort       = flag.Int("csv_port", 8090, "TCP upload port, CSV format")
 	jsonPort      = flag.Int("json_port", 18150, "TCP upload port, JSON format")
 	webserverPort = flag.Int("webserver_port", 8084, "HTTP port")
 	environment   = flag.String("environment", "development", "environment")
@@ -101,7 +100,6 @@ func main() {
 
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
-	serveTCP("CSV", *csvPort, handleCSVUpload)
 	serveTCP("JSON", *jsonPort, handleJSONUpload)
 
 	log.Println("API started on port", *webserverPort)
@@ -300,61 +298,6 @@ func parseJSONTick(coordinatorID string, input string) (*tick, error) {
 	return t, nil
 }
 
-func parseMessages(buf *bytes.Buffer) ([]string, error) {
-	var messages []string
-	var message *bytes.Buffer
-	for _, c := range buf.Bytes() {
-		if '>' == c {
-			if nil == message {
-				continue
-			}
-			messages = append(messages, message.String())
-			message = nil
-			continue
-		}
-		if '<' == c {
-			message = bytes.NewBuffer(nil)
-			continue
-		}
-		if nil == message {
-			continue
-		}
-		if err := message.WriteByte(c); err != nil {
-			return nil, err
-		}
-	}
-	return messages, nil
-}
-
-func parseControllerReading(input string) (*controllerReading, error) {
-	c := &controllerReading{
-		Datetime: time.Now(),
-	}
-
-	parts := strings.Split(input, ";")
-	if len(parts) != 3 {
-		return nil, fmt.Errorf("%d fields expected, got %d", 5, len(parts))
-	}
-
-	var err error
-	c.ControllerID = parts[0]
-	if err != nil {
-		return nil, err
-	}
-
-	c.GSMCoverage, err = parseInt(parts[1])
-	if err != nil {
-		return nil, err
-	}
-
-	c.BatteryVoltage, err = parseFloat(parts[2])
-	if err != nil {
-		return nil, err
-	}
-
-	return c, nil
-}
-
 func handleJSONUpload(buf *bytes.Buffer) (*upload, error) {
 	log.Println("handleJSONUpload", buf.String())
 
@@ -440,21 +383,6 @@ func tokenForCoordinator(coordinatorID string) string {
 
 type tickParser func(coordinatorID string, input string) (*tick, error)
 
-func parseTicks(coordinatorID string, input []string, parse tickParser) ([]*tick, error) {
-	var result []*tick
-	for _, s := range input {
-		if len(s) == 0 {
-			continue
-		}
-		t, err := parse(coordinatorID, s)
-		if err != nil {
-			return nil, err
-		}
-		result = append(result, t)
-	}
-	return result, nil
-}
-
 func saveTicks(ticks []*tick) error {
 	for _, t := range ticks {
 		if err := t.Save(); err != nil {
@@ -462,44 +390,6 @@ func saveTicks(ticks []*tick) error {
 		}
 	}
 	return nil
-}
-
-func handleCSVUpload(buf *bytes.Buffer) (*upload, error) {
-	log.Println("handleCSVUpload", buf.String())
-
-	go func(b *bytes.Buffer) {
-		if err := saveLog(b, loggingKeyCSV); err != nil {
-			bugsnag.Notify(err)
-		}
-	}(buf)
-
-	messages, err := parseMessages(buf)
-	if err != nil {
-		return nil, err
-	}
-	if len(messages) < 2 {
-		return nil, errors.New("Invalid package: at least 1 sensor reading and 1 controller reading expected")
-	}
-	cr, err := parseControllerReading(messages[len(messages)-1])
-	if err != nil {
-		return nil, err
-	}
-	ticks, err := parseTicks(cr.ControllerID, messages[0:len(messages)-1], parseJSONTick)
-	if err != nil {
-		return nil, err
-	}
-	for _, t := range ticks {
-		t.coordinatorID = cr.ControllerID
-	}
-	err = saveTicks(ticks)
-	if err != nil {
-		return nil, err
-	}
-	result := &upload{
-		cr:    *cr,
-		ticks: ticks,
-	}
-	return result, nil
 }
 
 func (t *tick) setTemperatureFromSensorReading(sensorReading float64, s *sensor) {

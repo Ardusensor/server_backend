@@ -30,8 +30,6 @@ func defineRoutes() {
 
 	api.HandleFunc("/admin/coordinators", getAdminCoordinators).Methods("GET")
 
-	api.HandleFunc("/log", getCSVLogs).Methods("GET")
-	api.HandleFunc("/v1/logs", getCSVLogs).Methods("GET")
 	api.HandleFunc("/v2/log", getJSONLogs).Methods("GET")
 	api.HandleFunc("/v2/logs", getJSONLogs).Methods("GET")
 
@@ -352,10 +350,6 @@ func getCoordinatorReadings(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	w.Write(b)
-}
-
-func getCSVLogs(w http.ResponseWriter, r *http.Request) {
-	writeLogs(w, r, loggingKeyCSV, 0)
 }
 
 func getJSONLogs(w http.ResponseWriter, r *http.Request) {
