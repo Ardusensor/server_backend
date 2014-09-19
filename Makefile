@@ -1,7 +1,10 @@
 export GOPATH=$(shell pwd)
 
-backend: *.go lint errcheck vet
+backend: build lint errcheck vet
 	@go fmt && go build -o bin/backend
+
+build:
+	@go build
 
 vet:
 	@go vet
