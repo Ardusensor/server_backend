@@ -16,15 +16,17 @@ func defineRoutes() {
 
 	api := r.PathPrefix("/api").Subrouter()
 
-	api.HandleFunc("/coordinators/{coordinator_id}/sensors", getCoordinatorSensors).Methods("GET")
-	api.HandleFunc("/coordinators/{coordinator_id}/readings", getCoordinatorReadings).Methods("GET")
-	api.HandleFunc("/coordinators/{coordinator_id}/log", getCoordinatorLog).Methods("GET")
-	api.HandleFunc("/coordinators/{coordinator_id}", putCoordinator).Methods("POST", "PUT")
-	api.HandleFunc("/coordinators/{coordinator_id}/{hash}", getCoordinator).Methods("GET")
+	coordinators := api.PathPrefix("coordinators").Subrouter()
+	coordinators.HandleFunc("/{coordinator_id}/sensors", getCoordinatorSensors).Methods("GET")
+	coordinators.HandleFunc("/{coordinator_id}/readings", getCoordinatorReadings).Methods("GET")
+	coordinators.HandleFunc("/{coordinator_id}/log", getCoordinatorLog).Methods("GET")
+	coordinators.HandleFunc("/{coordinator_id}", putCoordinator).Methods("POST", "PUT")
+	coordinators.HandleFunc("/{coordinator_id}/{hash}", getCoordinator).Methods("GET")
 
-	api.HandleFunc("/sensors/{sensor_id}", putSensor).Methods("POST", "PUT")
-	api.HandleFunc("/sensors/{sensor_id}/ticks", getSensorTicks).Methods("GET")
-	api.HandleFunc("/sensors/{sensor_id}/dots", getSensorDots).Methods("GET")
+	sensors := api.PathPrefix("/sensors").Subrouter()
+	sensors.HandleFunc("/{sensor_id}", putSensor).Methods("POST", "PUT")
+	sensors.HandleFunc("/{sensor_id}/ticks", getSensorTicks).Methods("GET")
+	sensors.HandleFunc("/{sensor_id}/dots", getSensorDots).Methods("GET")
 
 	api.HandleFunc("/admin/coordinators", getAdminCoordinators).Methods("GET")
 
