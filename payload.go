@@ -33,6 +33,47 @@ type coordinatorReading struct {
 	CreatedAt      *time.Time      `json:"created_at,omitempty"`
 }
 
+type coordinator struct {
+	ID     string `json:"id"`
+	Label  string `json:"label"`
+	Token  string `json:"token"`
+	URL    string `json:"url"`
+	LogURL string `json:"log_url"`
+}
+
+type controllerReading struct {
+	ControllerID   string    `json:"controller_id"`
+	Datetime       time.Time `json:"datetime"`
+	GSMCoverage    int64     `json:"gsm_coverage"`
+	BatteryVoltage float64   `json:"battery_voltage"`
+}
+
+type sensor struct {
+	ID                  string     `json:"id"`
+	LastTick            *time.Time `json:"last_tick,omitempty"`
+	ControllerID        string     `json:"controller_id"`
+	Lat                 string     `json:"lat,omitempty"`
+	Lng                 string     `json:"lng,omitempty"`
+	Label               string     `json:"label"`
+	CalibrationConstant *float64   `json:"calibration_constant,omitempty"`
+	CurrentTemperature  *float64   `json:"current_temperature,omitempty"`
+}
+
+type tick struct {
+	SensorID        string    `json:"sensor_id,omitempty"`
+	Datetime        time.Time `json:"datetime"`
+	NextDataSession string    `json:"next_data_session,omitempty"`      // sec
+	BatteryVoltage  float64   `json:"battery_voltage_visual,omitempty"` // mV
+	Temperature     float64   `json:"temperature,omitempty"`            // encoded temperature
+	RawTemperature  float64   `json:"raw_temperature,omitempty"`
+	Humidity        int64     `json:"sensor2,omitempty"`       // humidity
+	RadioQuality    int64     `json:"radio_quality,omitempty"` // (LQI=0..255)
+	Sendcounter     int64     `json:"send_counter,omitempty"`  // (LQI=0..255)
+	Version         int64     `json:"version"`
+	// is not serialized
+	coordinatorID string
+}
+
 func (pl payload) convertToOldFormat() ([]*tick, error) {
 	var ticks []*tick
 	for _, sensorReading := range pl.Coordinator.SensorReadings {
