@@ -14,22 +14,24 @@ import (
 func defineRoutes() {
 	r := mux.NewRouter()
 
-	r.HandleFunc("/api/coordinators/{coordinator_id}/sensors", getCoordinatorSensors).Methods("GET")
-	r.HandleFunc("/api/coordinators/{coordinator_id}/readings", getCoordinatorReadings).Methods("GET")
-	r.HandleFunc("/api/coordinators/{coordinator_id}/log", getCoordinatorLog).Methods("GET")
-	r.HandleFunc("/api/coordinators/{coordinator_id}", putCoordinator).Methods("POST", "PUT")
-	r.HandleFunc("/api/coordinators/{coordinator_id}/{hash}", getCoordinator).Methods("GET")
+	api := r.PathPrefix("/api").Subrouter()
 
-	r.HandleFunc("/api/sensors/{sensor_id}", putSensor).Methods("POST", "PUT")
-	r.HandleFunc("/api/sensors/{sensor_id}/ticks", getSensorTicks).Methods("GET")
-	r.HandleFunc("/api/sensors/{sensor_id}/dots", getSensorDots).Methods("GET")
+	api.HandleFunc("/coordinators/{coordinator_id}/sensors", getCoordinatorSensors).Methods("GET")
+	api.HandleFunc("/coordinators/{coordinator_id}/readings", getCoordinatorReadings).Methods("GET")
+	api.HandleFunc("/coordinators/{coordinator_id}/log", getCoordinatorLog).Methods("GET")
+	api.HandleFunc("/coordinators/{coordinator_id}", putCoordinator).Methods("POST", "PUT")
+	api.HandleFunc("/coordinators/{coordinator_id}/{hash}", getCoordinator).Methods("GET")
 
-	r.HandleFunc("/api/admin/coordinators", getAdminCoordinators).Methods("GET")
+	api.HandleFunc("/sensors/{sensor_id}", putSensor).Methods("POST", "PUT")
+	api.HandleFunc("/sensors/{sensor_id}/ticks", getSensorTicks).Methods("GET")
+	api.HandleFunc("/sensors/{sensor_id}/dots", getSensorDots).Methods("GET")
 
-	r.HandleFunc("/api/v1/log", getCSVLogs).Methods("GET")
-	r.HandleFunc("/api/v1/logs", getCSVLogs).Methods("GET")
-	r.HandleFunc("/api/v2/log", getJSONLogs).Methods("GET")
-	r.HandleFunc("/api/v2/logs", getJSONLogs).Methods("GET")
+	api.HandleFunc("/admin/coordinators", getAdminCoordinators).Methods("GET")
+
+	api.HandleFunc("/log", getCSVLogs).Methods("GET")
+	api.HandleFunc("/v1/logs", getCSVLogs).Methods("GET")
+	api.HandleFunc("/v2/log", getJSONLogs).Methods("GET")
+	api.HandleFunc("/v2/logs", getJSONLogs).Methods("GET")
 
 	http.Handle("/", r)
 }
