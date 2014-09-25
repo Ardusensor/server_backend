@@ -264,7 +264,7 @@ func (s *sensor) calculateCalibrationConstant() error {
 		return err
 	}
 	if lastTick != nil {
-		newValue := lastTick.Temperature - *s.CurrentTemperature
+		newValue := *s.CurrentTemperature - lastTick.Temperature
 		s.CalibrationConstant = &newValue
 		if s.CalibrationConstant != nil {
 			redisClient := redisPool.Get()
