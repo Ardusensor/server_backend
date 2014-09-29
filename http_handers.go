@@ -16,7 +16,7 @@ func defineRoutes() {
 
 	api := r.PathPrefix("/api").Subrouter()
 
-	coordinators := api.PathPrefix("coordinators").Subrouter()
+	coordinators := api.PathPrefix("/coordinators").Subrouter()
 	coordinators.HandleFunc("/{coordinator_id}/sensors", getCoordinatorSensors).Methods("GET")
 	coordinators.HandleFunc("/{coordinator_id}/readings", getCoordinatorReadings).Methods("GET")
 	coordinators.HandleFunc("/{coordinator_id}/log", getCoordinatorLog).Methods("GET")
