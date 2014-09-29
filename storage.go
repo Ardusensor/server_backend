@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -259,14 +260,20 @@ func (s *sensor) calculateCalibrationConstant() error {
 	if s.CurrentTemperature == nil {
 		return nil
 	}
+	log.Println("[CALIBRATION] Calculating")
 	lastTick, err := lastTickOfSensor(s.ID)
 	if err != nil {
 		return err
 	}
+	log.Println("[CALIBRATION] Last tick is", lastTick)
 	if lastTick != nil {
-		newValue := *s.CurrentTemperature - lastTick.Temperature
+		log.Println("[CALIBRATION] current temperature is", *s.CurrentTemperature)
+		log.Println("[CALIBRATION] uncalibrated temperature of last tick is", lastTick.calculateTemperatureFromRaw())
+		newValue := *s.CurrentTemperature - lastTick.calculateTemperatureFromRaw()
+		log.Println("[CALIBRATION] new value is", newValue)
 		s.CalibrationConstant = &newValue
 		if s.CalibrationConstant != nil {
+			log.Println("[CALIBRATION] saving new value", *s.CalibrationConstant)
 			redisClient := redisPool.Get()
 			defer redisClient.Close()
 
@@ -275,6 +282,8 @@ func (s *sensor) calculateCalibrationConstant() error {
 			}
 		}
 	}
+
+	log.Println("[CALIBRATION] setting current temp to nil again")
 	s.CurrentTemperature = nil
 	return nil
 }

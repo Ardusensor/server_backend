@@ -352,13 +352,23 @@ func saveTicks(ticks []*tick) error {
 	return nil
 }
 
+func (t tick) calculateTemperatureFromRaw() float64 {
+	return ((t.RawTemperature * 0.001292) - 0.6) / 0.01
+}
+
 func (t *tick) setTemperatureFromSensorReading(sensorReading float64, s *sensor) {
 	t.RawTemperature = sensorReading
 
-	t.Temperature = ((t.RawTemperature * 0.001292) - 0.6) / 0.01
+	log.Println("[CALCULATE TEMP]", t.SensorID, "sensorReading", sensorReading)
+
+	t.Temperature = t.calculateTemperatureFromRaw()
+
+	log.Println("[CALCULATE TEMP]", t.SensorID, "Temperature = ((t.RawTemperature * 0.001292) - 0.6) / 0.01", t.Temperature)
 
 	if s.CalibrationConstant != nil {
+		log.Println("[CALCULATE TEMP]", t.SensorID, "CalibrationConstant", *s.CalibrationConstant)
 		t.Temperature += *s.CalibrationConstant
+		log.Println("[CALCULATE TEMP]", t.SensorID, "Temperature = t.Temperature += *s.CalibrationConstant", t.Temperature)
 	}
 }
 

@@ -74,7 +74,6 @@ type tick struct {
 	RadioQuality    int64     `json:"radio_quality,omitempty"` // (LQI=0..255)
 	Sendcounter     int64     `json:"send_counter,omitempty"`  // (LQI=0..255)
 	Version         int64     `json:"version"`
-	PacketRSSI      int64     `json:"packet_rssi"`
 	// is not serialized
 	coordinatorID string
 }
@@ -89,7 +88,7 @@ func (pl payload) convertToOldFormat() ([]*tick, error) {
 			SensorID:      sensorReading.SensorID,
 			Humidity:      sensorReading.Moisture,
 			Sendcounter:   sensorReading.SendCounter,
-			PacketRSSI:    sensorReading.PacketRSSI,
+			RadioQuality:  sensorReading.PacketRSSI,
 		}
 		sensor, err := loadSensor(t.coordinatorID, sensorReading.SensorID)
 		if err != nil {
