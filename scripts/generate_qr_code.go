@@ -46,5 +46,17 @@ func main() {
 		}
 
 		// place text on it
+		b, err = exec.Command("convert", filename,
+			"-fill", "white",
+			"-draw", "rectangle 63,112,148,148",
+			"-fill", "black",
+			"-font", "Helvetica",
+			"-pointsize", "22",
+			"-annotate", "+64+132", code,
+			filename).CombinedOutput()
+		if err != nil {
+			fmt.Println(string(b))
+			os.Exit(1)
+		}
 	}
 }
