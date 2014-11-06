@@ -30,3 +30,6 @@ backend
 
 # generated qrcodes
 qrcodes
+
+# vim swap
+*.swp
