@@ -28,3 +28,5 @@ backend
 
 .DS_Store
 
+# generated qrcodes
+qrcodes
